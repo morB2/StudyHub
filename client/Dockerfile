@@ -1,4 +1,4 @@
-# client/Dockerfile - build static assets and serve with nginx
+# client/Dockerfile -- build static assets and serve with nginx
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
