@@ -5,6 +5,13 @@ const connectSupabase = () => {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_KEY;
 
+    // --- תוספת הבדיקה שלנו שתדפיס רק את תחילת המפתח ---
+    console.log(
+      "🔍 Supabase Key starts with:", 
+      supabaseKey ? supabaseKey.substring(0, 15) + "..." : "UNDEFINED"
+    );
+    // --------------------------------------------------
+
     if (!supabaseUrl || !supabaseKey) {
       throw new Error(
         "SUPABASE_URL or SUPABASE_KEY is not defined in environment variables",

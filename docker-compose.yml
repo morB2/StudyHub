@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: studyhub-server
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "3001:3001"
     environment:
@@ -16,6 +18,8 @@ services:
       dockerfile: Dockerfile
     container_name: studyhub-client
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "5173:80"
     depends_on:

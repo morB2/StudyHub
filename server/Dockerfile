@@ -1,8 +1,8 @@
 # server/Dockerfile
-FROM node:18-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY . .
 EXPOSE 3001
-CMD ["node", "index.js"]
+CMD ["node", "src/index.js"]
