@@ -1,7 +1,4 @@
-import {
-  createUser,
-  getAllUsers
-} from "../services/userService.js";
+import { createUser, getAllUsers } from "../services/userService.js";
 
 export const addUser = async (req, res) => {
   try {
@@ -11,7 +8,7 @@ export const addUser = async (req, res) => {
     // וידוא שכל שדות החובה קיימים
     if (!name || !email || !password) {
       return res.status(400).json({
-        error: "Name, email, and password are required"
+        error: "Name, email, and password are required",
       });
     }
 
@@ -20,12 +17,12 @@ export const addUser = async (req, res) => {
 
     res.status(201).json({
       message: "User created successfully",
-      data: newUser
+      data: newUser,
     });
-
   } catch (error) {
-    res.status(500).json({
-      error: error.message
+    const status = error.status || 500;
+    res.status(status).json({
+      error: error.message,
     });
   }
 };
@@ -36,7 +33,7 @@ export const fetchUsers = async (req, res) => {
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({
-      error: error.message
+      error: error.message,
     });
   }
 };

@@ -55,18 +55,18 @@
 //               </button>
 //             </div>
 //           </div>
-          
+
 //           {/* Avatar Button to open profile */}
-//           <button 
+//           <button
 //             onClick={() => setShowProfileModal(true)}
 //             className="relative group cursor-pointer outline-none"
 //           >
 //             {user.photoURL ? (
-//               <img 
-//                 src={user.photoURL} 
-//                 alt={user.displayName || ''} 
-//                 className="w-10 h-10 rounded-full border border-gray-200 shadow-sm group-hover:scale-105 transition-transform" 
-//                 referrerPolicy="no-referrer" 
+//               <img
+//                 src={user.photoURL}
+//                 alt={user.displayName || ''}
+//                 className="w-10 h-10 rounded-full border border-gray-200 shadow-sm group-hover:scale-105 transition-transform"
+//                 referrerPolicy="no-referrer"
 //               />
 //             ) : (
 //               <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 group-hover:scale-105 transition-transform text-indigo-400">
@@ -100,8 +100,6 @@
 
 // client/src/components/Auth.jsx
 
-
-
 //1------------------------------------------------------------------------------------------------------------------
 
 // import React, { useState, useEffect } from 'react';
@@ -112,7 +110,7 @@
 // export default function Auth({ onClose }) {
 //   const { t, isRTL } = useLanguage();
 //   const [user, setUser] = useState(auth.currentUser);
-  
+
 //   const [isSignUp, setIsSignUp] = useState(false);
 //   const [email, setEmail] = useState('');
 //   const [password, setPassword] = useState('');
@@ -150,7 +148,7 @@
 //       <div className="flex items-center gap-3 bg-gray-50/80 px-4 py-2 rounded-2xl border border-gray-100">
 //         <div className={isRTL ? 'text-right' : 'text-left'}>
 //           <p className="text-xs font-bold text-gray-900">{user.displayName || 'ישראל ישראלי'}</p>
-//           <button 
+//           <button
 //             onClick={handleLogout}
 //             className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer"
 //           >
@@ -169,8 +167,8 @@
 //   return (
 //     <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-2xl relative border border-gray-50 text-left">
 //       {/* כפתור סגירה X */}
-//       <button 
-//         onClick={onClose} 
+//       <button
+//         onClick={onClose}
 //         className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
 //       >
 //         <X size={20} />
@@ -273,7 +271,6 @@
 //   );
 // }
 
-
 //2------------------------------------------------------------------------------------------------------------------
 
 // client/src/components/Auth.jsx
@@ -285,7 +282,7 @@
 // export default function Auth({ onClose }) {
 //   const { t, isRTL } = useLanguage();
 //   const [user, setUser] = useState(auth.currentUser);
-  
+
 //   const [isSignUp, setIsSignUp] = useState(false);
 //   const [email, setEmail] = useState('');
 //   const [password, setPassword] = useState('');
@@ -319,7 +316,7 @@
 //     const width = 500, height = 600;
 //     const left = window.screen.width / 2 - width / 2;
 //     const top = window.screen.height / 2 - height / 2;
-    
+
 //     // פתיחת חלון אימות חשבונות גוגל רשמי
 //     const googleWindow = window.open(
 //       "https://accounts.google.com/gsi/select?client_id=mock&ux_mode=popup",
@@ -331,16 +328,16 @@
 //     const timer = setInterval(() => {
 //       if (googleWindow ? googleWindow.closed : true) {
 //         clearInterval(timer);
-        
+
 //         // יצירת המשתמש על פי הבחירה הפיקטיבית אך עם אימייל דינמי שאת קובעת או ברירת מחדל של המחשב
 //         const userEmail = prompt("הכניסי את כתובת הג'ימייל איתה בחרת להתחבר:") || "user@gmail.com";
-//         const googleUser = { 
-//           uid: 'google_' + Math.random().toString(36).substr(2, 9), 
-//           email: userEmail, 
+//         const googleUser = {
+//           uid: 'google_' + Math.random().toString(36).substr(2, 9),
+//           email: userEmail,
 //           displayName: userEmail.split('@')[0],
 //           avatar: userEmail.substring(0, 2).toUpperCase()
 //         };
-        
+
 //         auth.currentUser = googleUser;
 //         localStorage.setItem('studybuddy_user', JSON.stringify(googleUser));
 //         window.location.reload();
@@ -358,7 +355,7 @@
 //       <div className="flex items-center gap-3 bg-gray-50/80 px-4 py-2 rounded-2xl border border-gray-100">
 //         <div className={isRTL ? 'text-right' : 'text-left'}>
 //           <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
-//           <button 
+//           <button
 //             onClick={handleLogout}
 //             className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer"
 //           >
@@ -376,8 +373,8 @@
 //   // מצב מנותק: מודאל הלוגין המקורי
 //   return (
 //     <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-2xl relative border border-gray-50 text-left">
-//       <button 
-//         onClick={onClose} 
+//       <button
+//         onClick={onClose}
 //         className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
 //       >
 //         <X size={20} />
@@ -470,23 +467,28 @@
 //   );
 // }
 
-
 //3------------------------------------------------------------------------------------------------------------------
 
 // client/src/components/Auth.jsx
-import React, { useState, useEffect } from 'react';
-import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from '../firebase';
-import { LogIn, LogOut, Mail, Lock, X } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useState, useEffect } from "react";
+import {
+  auth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "../firebase";
+import { LogIn, LogOut, Mail, Lock, X } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function Auth({ onClose, mode = "all" }) {
-  const { t, isRTL } = useLanguage();
+  const { isRTL } = useLanguage();
   const [user, setUser] = useState(auth.currentUser);
-  
+
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -497,10 +499,15 @@ export default function Auth({ onClose, mode = "all" }) {
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password,
+          email.split("@")[0],
+        );
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -508,35 +515,38 @@ export default function Auth({ onClose, mode = "all" }) {
       // רענון קל כדי לעדכן את האפליקציה הראשית והדשבורד מיד
       window.location.reload();
     } catch (err) {
-      setError(err.message || 'Authentication failed.');
+      setError(err.message || "Authentication failed.");
     }
   };
 
   const handleGoogleSignIn = () => {
-    const width = 500, height = 600;
+    const width = 500,
+      height = 600;
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
-    
+
     const googleWindow = window.open(
       "https://accounts.google.com/gsi/select?client_id=mock&ux_mode=popup",
       "Google Sign In",
-      `width=${width},height=${height},top=${top},left=${left}`
+      `width=${width},height=${height},top=${top},left=${left}`,
     );
 
     const timer = setInterval(() => {
       if (googleWindow ? googleWindow.closed : true) {
         clearInterval(timer);
-        
-        const userEmail = prompt("הכניסי את כתובת הג'ימייל איתה בחרת להתחבר:") || "user@gmail.com";
-        const googleUser = { 
-          uid: 'google_' + Math.random().toString(36).substr(2, 9), 
-          email: userEmail, 
-          displayName: userEmail.split('@')[0],
-          avatar: userEmail.substring(0, 2).toUpperCase()
+
+        const userEmail =
+          prompt("הכניסי את כתובת הג'ימייל איתה בחרת להתחבר:") ||
+          "user@gmail.com";
+        const googleUser = {
+          uid: "google_" + Math.random().toString(36).substr(2, 9),
+          email: userEmail,
+          displayName: userEmail.split("@")[0],
+          avatar: userEmail.substring(0, 2).toUpperCase(),
         };
-        
+
         auth.currentUser = googleUser;
-        localStorage.setItem('studybuddy_user', JSON.stringify(googleUser));
+        localStorage.setItem("studybuddy_user", JSON.stringify(googleUser));
         window.location.reload();
       }
     }, 1000);
@@ -551,9 +561,9 @@ export default function Auth({ onClose, mode = "all" }) {
   if (user && mode === "navbarOnly") {
     return (
       <div className="flex items-center gap-3 bg-gray-50/80 px-4 py-2 rounded-2xl border border-gray-100">
-        <div className={isRTL ? 'text-right' : 'text-left'}>
+        <div className={isRTL ? "text-right" : "text-left"}>
           <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
-          <button 
+          <button
             onClick={handleLogout}
             className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer"
           >
@@ -562,7 +572,8 @@ export default function Auth({ onClose, mode = "all" }) {
           </button>
         </div>
         <div className="w-9 h-9 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-          {user.avatar || (user.displayName ? user.displayName.substring(0, 2) : 'יי')}
+          {user.avatar ||
+            (user.displayName ? user.displayName.substring(0, 2) : "יי")}
         </div>
       </div>
     );
@@ -572,8 +583,8 @@ export default function Auth({ onClose, mode = "all" }) {
 
   return (
     <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-2xl relative border border-gray-50 text-left">
-      <button 
-        onClick={onClose} 
+      <button
+        onClick={onClose}
         className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
       >
         <X size={20} />
@@ -581,7 +592,7 @@ export default function Auth({ onClose, mode = "all" }) {
 
       <div className="space-y-6">
         <h2 className="text-2xl font-black text-gray-900">
-          {isSignUp ? 'Register' : 'Login'}
+          {isSignUp ? "Register" : "Login"}
         </h2>
 
         {error && (
@@ -592,9 +603,14 @@ export default function Auth({ onClose, mode = "all" }) {
 
         <form onSubmit={handleAuth} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Email</label>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Email
+            </label>
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Mail
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
               <input
                 type="email"
                 required
@@ -607,9 +623,14 @@ export default function Auth({ onClose, mode = "all" }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Password</label>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Password
+            </label>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Lock
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
               <input
                 type="password"
                 required
@@ -626,7 +647,7 @@ export default function Auth({ onClose, mode = "all" }) {
             className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
           >
             <LogIn size={16} />
-            <span>{isSignUp ? 'Register' : 'Login'}</span>
+            <span>{isSignUp ? "Register" : "Login"}</span>
           </button>
         </form>
 
@@ -642,7 +663,11 @@ export default function Auth({ onClose, mode = "all" }) {
           onClick={handleGoogleSignIn}
           className="w-full py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
         >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
+          <img
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+            alt="Google"
+            className="w-4 h-4"
+          />
           <span>Sign in with Google</span>
         </button>
 
@@ -651,13 +676,13 @@ export default function Auth({ onClose, mode = "all" }) {
             type="button"
             onClick={() => {
               setIsSignUp(!isSignUp);
-              setError('');
+              setError("");
             }}
             className="text-xs text-gray-500"
           >
-            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+            {isSignUp ? "Already have an account? " : "Don't have an account? "}
             <span className="text-indigo-600 font-bold hover:underline">
-              {isSignUp ? 'Login' : 'Register'}
+              {isSignUp ? "Login" : "Register"}
             </span>
           </button>
         </div>
