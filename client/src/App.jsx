@@ -26,6 +26,11 @@ export default function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
+
+  const handleGroupCreated = () => {
+    setGroupsRefreshKey(prev => prev + 1);
+  };
 
   // האזנה למצב המשתמש (מזהה התחברות והתנתקות בזמן אמת)
   useEffect(() => {
@@ -111,13 +116,13 @@ export default function App() {
               </button>
             </div>
 
-            <GroupList onSelectGroup={setSelectedGroup} />
+            <GroupList key={groupsRefreshKey} onSelectGroup={setSelectedGroup} />
           </div>
         )}
       </main>
 
       {showSettingsModal && <Settings onClose={() => setShowSettingsModal(false)} />}
-      {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} />}
+      {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} onGroupCreated={handleGroupCreated} />}
 
       {/* מערכת התראות צפות */}
       <div className={`fixed bottom-6 z-50 flex flex-col gap-3 max-w-sm w-full p-4 ${isRTL ? 'left-6' : 'right-6'}`}>

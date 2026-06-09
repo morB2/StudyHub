@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase';
 import { mockGroups } from '../mock/mockData';
+import { fetchGroupsApi, joinGroupApi, leaveGroupApi } from '../services/groupService';
 import { Users, BookOpen, Search, ArrowRight, UserPlus, UserMinus, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -12,38 +13,82 @@ export default function GroupList({ onSelectGroup }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // סימולציית טעינה קצרה ואז משיכת נתונים מה-Mock Data
+  // Fetch groups from the server and sync with mock data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setGroups([...mockGroups]);
-      setLoading(false);
-    }, 400); // טעינה מדומה של 400 מילישניות בשביל האפקט של ה-Skeleton
-    return () => clearTimeout(timer);
+    let active = true;
+    const loadGroups = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchGroupsApi();
+        if (active) {
+          // Sync in-memory mockGroups to maintain compatibility with other screens
+          mockGroups.length = 0;
+          mockGroups.push(...data);
+          setGroups(data);
+        }
+      } catch (error) {
+        console.error("Failed to load groups:", error);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    loadGroups();
+    return () => { active = false; };
   }, []);
 
-  // עדכון מצב הצטרפות או עזיבה מקומית בזיכרון ה-Mock Data
-  const handleJoinLeave = (e, group) => {
+  // Update membership status using API
+  const handleJoinLeave = async (e, group) => {
     e.stopPropagation();
     if (!auth.currentUser) {
       alert("Please sign in to join groups");
       return;
     }
 
-    const currentGroup = mockGroups.find(g => g.id === group.id);
-    if (!currentGroup) return;
+    const userId = auth.currentUser.uid;
+    const isMember = group.members.includes(userId);
 
-    const isMember = currentGroup.members.includes(auth.currentUser.uid);
+    try {
+      if (isMember) {
+        // Leave group API call
+        await leaveGroupApi(group.id, userId);
 
-    if (isMember) {
-      // עזיבת קבוצה
-      currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
-    } else {
-      // הצטרפות לקבוצה
-      currentGroup.members.push(auth.currentUser.uid);
+        // Update local mockData in-memory array
+        const currentGroup = mockGroups.find(g => g.id === group.id);
+        if (currentGroup) {
+          currentGroup.members = currentGroup.members.filter(uid => uid !== userId);
+        }
+
+        // Update state
+        setGroups(prev => prev.map(g => {
+          if (g.id === group.id) {
+            return { ...g, members: g.members.filter(uid => uid !== userId) };
+          }
+          return g;
+        }));
+      } else {
+        // Join group API call
+        await joinGroupApi(group.id, userId);
+
+        // Update local mockData in-memory array
+        const currentGroup = mockGroups.find(g => g.id === group.id);
+        if (currentGroup) {
+          currentGroup.members.push(userId);
+        }
+
+        // Update state
+        setGroups(prev => prev.map(g => {
+          if (g.id === group.id) {
+            return { ...g, members: [...g.members, userId] };
+          }
+          return g;
+        }));
+      }
+    } catch (error) {
+      console.error("Error joining/leaving group:", error);
+      alert("Error: " + error.message);
     }
-
-    // רענון הסטייט המקומי כדי שהשינוי ישתקף מיד במסך
-    setGroups([...mockGroups]);
   };
 
   // סינון ופיקוח על הטרמינל

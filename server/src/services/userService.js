@@ -59,3 +59,33 @@ export const getAllUsers = async () => {
 
   return data;
 };
+
+export const loginUser = async ({ email, password }) => {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    const e = new Error("Invalid email or password");
+    e.status = 401;
+    throw e;
+  }
+
+  const [salt, key] = data.password.split(":");
+  const derivedKey = scryptSync(password, salt, 64).toString("hex");
+  if (key !== derivedKey) {
+    const e = new Error("Invalid email or password");
+    e.status = 401;
+    throw e;
+  }
+
+  // Remove password from returned user object
+  const { password: _, ...userWithoutPassword } = data;
+  return userWithoutPassword;
+};
