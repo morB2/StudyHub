@@ -1,16 +1,17 @@
 // client/src/components/GroupDetail.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
-import { 
-  mockChatMessages, mockMaterials, mockMeetings, 
-  mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups 
+import {
+  mockChatMessages, mockMaterials, mockMeetings,
+  mockNotices, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
+import { createFolder, getFoldersByGroup } from '../services/service';
 import { cn } from '../lib/utils';
-import { 
-  MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X, 
-  MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles, 
-  Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight, 
-  Search, Move, Mic, Square, Play, Pause 
+import {
+  MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
+  MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles,
+  Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
+  Search, Move, Mic, Square, Play, Pause
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -20,7 +21,7 @@ import AIAssistant from './AIAssistant';
 export default function GroupDetail({ group, onBack }) {
   const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState('chat');
-  
+
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -56,7 +57,11 @@ export default function GroupDetail({ group, onBack }) {
 
   // טעינת וסינון כל הנתונים המדומים השייכים לקבוצה הנוכחית בטעינה ראשונית
   useEffect(() => {
-    refreshAllData();
+    const loadData = async () => {
+      await refreshAllData();
+    };
+
+    loadData();
   }, [group.id]);
 
   useEffect(() => {
@@ -65,16 +70,26 @@ export default function GroupDetail({ group, onBack }) {
     }
   }, [messages, activeTab]);
 
-  const refreshAllData = () => {
+  const loadFolders = async () => {
+    try {
+      const serverFolders = await getFoldersByGroup(group.id);
+      setFolders(serverFolders);
+    } catch (error) {
+      console.error("Failed to load folders:", error);
+      setFolders([]);
+    }
+  };
+
+  const refreshAllData = async () => {
     // 1. סינון הודעות צ'אט
     const filteredMsgs = mockChatMessages
       .filter(m => m.groupId === group.id)
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     setMessages(filteredMsgs);
 
-    // 2. סינון חומרי לימוד ותיקיות
+    // 2. סינון חומרי לימוד
     setMaterials(mockMaterials.filter(m => m.groupId === group.id));
-    setFolders(mockFolders.filter(f => f.groupId === group.id));
+    await loadFolders();
 
     // 3. סינון מפגשים
     const filteredMeetings = mockMeetings
@@ -134,23 +149,25 @@ export default function GroupDetail({ group, onBack }) {
   };
 
   // --- פעולות חומרי לימוד ותיקיות ---
-  const handleCreateFolder = (e) => {
+  const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim() || !auth.currentUser) return;
 
-    const folder = {
-      id: 'folder_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
-      name: newFolderName.trim(),
-      parentId: currentFolderId,
-      creatorId: auth.currentUser.uid,
-      createdAt: new Date()
-    };
+    try {
+      const createdFolder = await createFolder({
+        groupId: group.id,
+        name: newFolderName.trim(),
+        parentId: currentFolderId,
+        creatorId: auth.currentUser.uid,
+      });
 
-    mockFolders.push(folder);
-    setNewFolderName('');
-    setShowFolderModal(false);
-    refreshAllData();
+      setFolders(prev => [...prev, createdFolder]);
+      setNewFolderName('');
+      setShowFolderModal(false);
+    } catch (error) {
+      console.error("Folder creation failed:", error);
+      alert("Failed to create folder. Please try again.");
+    }
   };
 
   const handleUploadMaterial = (e) => {
@@ -186,8 +203,7 @@ export default function GroupDetail({ group, onBack }) {
     if (!window.confirm(t('deleteConfirm'))) return;
 
     if (type === 'folder') {
-      const idx = mockFolders.findIndex(f => f.id === id);
-      if (idx !== -1) mockFolders.splice(idx, 1);
+      setFolders(prev => prev.filter(f => f.id !== id));
       // העברת קבצים שהיו בתיקייה לתיקיית האב
       mockMaterials.forEach(m => {
         if (m.folderId === id) m.folderId = null;
@@ -273,7 +289,7 @@ export default function GroupDetail({ group, onBack }) {
     const currentGroup = mockGroups.find(g => g.id === group.id);
     if (currentGroup) {
       currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
-      
+
       // אם הקבוצה נשארה ריקה, נמחק אותה
       if (currentGroup.members.length === 0) {
         const idx = mockGroups.findIndex(g => g.id === group.id);
@@ -290,11 +306,11 @@ export default function GroupDetail({ group, onBack }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-      
+
       {/* כפתור חזרה וכותרת ראשית */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onBack}
             className="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 text-gray-600 shadow-sm transition-all cursor-pointer"
           >
@@ -319,8 +335,8 @@ export default function GroupDetail({ group, onBack }) {
             onClick={() => setShowAiAssistant(!showAiAssistant)}
             className={cn(
               "px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer border",
-              showAiAssistant 
-                ? "bg-amber-500 border-amber-500 text-white shadow-amber-100" 
+              showAiAssistant
+                ? "bg-amber-500 border-amber-500 text-white shadow-amber-100"
                 : "bg-white border-gray-100 text-amber-600 hover:bg-amber-50"
             )}
           >
@@ -343,7 +359,7 @@ export default function GroupDetail({ group, onBack }) {
       {/* גריד מרכזי המפצל בין התוכן לבין עוזר ה-AI במידה ונפתח */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <div className={cn("lg:col-span-3 space-y-6", showAiAssistant && "lg:col-span-2")}>
-          
+
           {/* סרגל ניווט פנימי (Tabs Navbar) */}
           <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex gap-1 overflow-x-auto">
             {[
@@ -361,8 +377,8 @@ export default function GroupDetail({ group, onBack }) {
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap cursor-pointer",
-                    activeTab === tab.id 
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" 
+                    activeTab === tab.id
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100"
                       : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                   )}
                 >
@@ -405,8 +421,8 @@ export default function GroupDetail({ group, onBack }) {
                   onClick={toggleRecording}
                   className={cn(
                     "p-3 rounded-xl transition-all cursor-pointer border",
-                    isRecording 
-                      ? "bg-red-500 border-red-500 text-white animate-pulse" 
+                    isRecording
+                      ? "bg-red-500 border-red-500 text-white animate-pulse"
                       : "bg-gray-50 border-gray-100 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                   )}
                 >
@@ -456,11 +472,11 @@ export default function GroupDetail({ group, onBack }) {
 
               {/* גריד תיקיות וקבצים נוכחיים */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* צד א: רשימת הפריטים (תיקיות וקבצים) */}
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
                   <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2">Items inside</h3>
-                  
+
                   {currentFolders.length === 0 && currentMaterials.length === 0 && (
                     <p className="text-sm text-gray-400 italic text-center py-8">Folder is empty</p>
                   )}
@@ -489,7 +505,7 @@ export default function GroupDetail({ group, onBack }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button 
+                        <button
                           onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
                           className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
                           title={t('moveToFolder')}
@@ -527,7 +543,7 @@ export default function GroupDetail({ group, onBack }) {
                   <form onSubmit={handleUploadMaterial} className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileName')}</label>
-                      <input 
+                      <input
                         type="text" required placeholder="e.g. Summary Lesson 4"
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)}
@@ -535,7 +551,7 @@ export default function GroupDetail({ group, onBack }) {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileUrl')}</label>
-                      <input 
+                      <input
                         type="url" required placeholder="https://drive.google.com/..."
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={newMaterialUrl} onChange={(e) => setNewMaterialUrl(e.target.value)}
@@ -576,7 +592,7 @@ export default function GroupDetail({ group, onBack }) {
                 <form onSubmit={handleScheduleMeeting} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingTitle')}</label>
-                    <input 
+                    <input
                       type="text" required placeholder="e.g. Exam Prep Session"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)}
@@ -585,7 +601,7 @@ export default function GroupDetail({ group, onBack }) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingDate')}</label>
-                      <input 
+                      <input
                         type="date" required
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)}
@@ -593,7 +609,7 @@ export default function GroupDetail({ group, onBack }) {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingTime')}</label>
-                      <input 
+                      <input
                         type="time" required
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)}
@@ -602,7 +618,7 @@ export default function GroupDetail({ group, onBack }) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">{t('location')}</label>
-                    <input 
+                    <input
                       type="text" placeholder="Zoom, Library, etc. (Default: Online)"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={meetingLocation} onChange={(e) => setMeetingLocation(e.target.value)}
@@ -643,7 +659,7 @@ export default function GroupDetail({ group, onBack }) {
                 <form onSubmit={handlePostNotice} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Title</label>
-                    <input 
+                    <input
                       type="text" required placeholder="e.g. Change in Meeting Location"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)}
@@ -651,7 +667,7 @@ export default function GroupDetail({ group, onBack }) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Content</label>
-                    <textarea 
+                    <textarea
                       required rows={4} placeholder="Write down your updates for the group..."
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
                       value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)}
@@ -725,7 +741,7 @@ export default function GroupDetail({ group, onBack }) {
             <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"><X size={18} /></button>
             <h3 className="font-black text-gray-900 text-base mb-4">{t('createFolder')}</h3>
             <form onSubmit={handleCreateFolder} className="space-y-4">
-              <input 
+              <input
                 type="text" required placeholder={t('folderName')}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
@@ -748,7 +764,7 @@ export default function GroupDetail({ group, onBack }) {
             <form onSubmit={handleSendInvite} className="space-y-4">
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
+                <input
                   type="email" required placeholder={t('emailPlaceholder')}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
@@ -792,18 +808,18 @@ function AudioMessagePlayer({ src, isMe }) {
 
   return (
     <div className={cn("flex items-center gap-3 py-1", isMe ? "text-white" : "text-gray-900")}>
-      <button 
+      <button
         type="button"
         onClick={togglePlay}
         className={cn("p-2 rounded-full transition-all cursor-pointer", isMe ? "bg-white/20 hover:bg-white/30" : "bg-indigo-100 text-indigo-600 hover:bg-indigo-200")}
       >
         {isPlaying ? <Pause size={14} /> : <Play size={14} />}
       </button>
-      
+
       <div className="flex flex-col gap-1 min-w-[120px]">
-        <audio 
-          ref={audioRef} 
-          src={src} 
+        <audio
+          ref={audioRef}
+          src={src}
           onEnded={() => setIsPlaying(false)}
           className="hidden"
         />
@@ -812,7 +828,7 @@ function AudioMessagePlayer({ src, isMe }) {
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-[9px] font-bold opacity-60 uppercase tracking-wider">Audio Memo</span>
-          <select 
+          <select
             value={playbackRate}
             onChange={(e) => handleRateChange(Number(e.target.value))}
             className={cn(
