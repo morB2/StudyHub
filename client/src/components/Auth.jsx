@@ -30,20 +30,62 @@ export default function Auth({ onClose, mode = "all" }) {
   const handleAuth = async (e) => {
     e.preventDefault();
     setError("");
+
+    // 1. חסימת סיסמה קצרה מדי בצד הלקוח (המשתמש מקבל שגיאה אדומה מיד)
+    if (isSignUp && password.length < 4) {
+      setError("הסיסמה חייבת להכיל לפחות 4 תווים.");
+      return; // עוצרים את הפעולה, לא פונים לשרת
+    }
+
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-          email.split("@")[0],
-        );
+        const defaultName = email.split("@")[0];
+        
+        const response = await fetch("http://localhost:3001/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: defaultName, email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "ההרשמה נכשלה.");
+        }
+
+        // במקום alert: נציג הודעה ונחכה רגע לפני שנעבור למצב התחברות
+        setError("הרשמה בוצעה בהצלחה! מעביר אותך להתחברות...");
+        
+        setTimeout(() => {
+          setIsSignUp(false);
+          setPassword("");
+          setError(""); // איפוס ההודעה אחרי המעבר
+        }, 2000); // ההודעה תוצג למשך 2 שניות
+        
+        
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      if (onClose) onClose();
-      // רענון קל כדי לעדכן את האפליקציה הראשית והדשבורד מיד
+        // ======== התחברות אמיתית מול שרת ה-Node.js ========
+        const response = await fetch("http://localhost:3001/users/login", { 
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "ההתחברות נכשלה. כדאי לבדוק את הפרטים שוב.");
+        }
+
+        auth.currentUser = data.user;
+        localStorage.setItem("studybuddy_user", JSON.stringify(data.user));
+        localStorage.setItem("studybuddy_token", data.token); 
+
+        if (onClose) onClose();
       window.location.reload();
+}
     } catch (err) {
       setError(err.message || "Authentication failed.");
     }
@@ -126,7 +168,7 @@ export default function Auth({ onClose, mode = "all" }) {
         </h2>
 
         {error && (
-          <div className="p-3 bg-red-50 text-red-600 text-xs font-semibold rounded-xl text-center border border-red-100">
+          <div className={`p-3 text-xs font-semibold rounded-xl text-center border ${error.includes("בהצלחה") ? "bg-green-50 text-green-600 border-green-100" : "bg-red-50 text-red-600 border-red-100"}`}>
             {error}
           </div>
         )}
@@ -164,6 +206,7 @@ export default function Auth({ onClose, mode = "all" }) {
               <input
                 type="password"
                 required
+minLength={4} 
                 placeholder="••••••••"
                 className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
                 value={password}
