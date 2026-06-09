@@ -9,7 +9,7 @@ import { cn } from '../lib/utils';
 import { 
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X, 
   MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles, 
-  Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight, 
+  Video, UserPlus, UserMinus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight, 
   Search, Move, Mic, Square, Play, Pause, Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
