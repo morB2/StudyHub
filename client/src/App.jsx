@@ -96,7 +96,7 @@ export default function App() {
       {/* תוכן מרכזי של הדשבורד */}
       <main className="pb-16">
         {selectedGroup ? (
-          <GroupDetail group={selectedGroup} onBack={() => setSelectedGroup(null)} />
+          <GroupDetail group={selectedGroup} onBack={() => setSelectedGroup(null)} onNotify={showToast} />
         ) : (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 space-y-6">
             <InvitationsList />

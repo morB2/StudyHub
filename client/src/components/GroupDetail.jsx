@@ -18,9 +18,18 @@ import { useLanguage } from '../contexts/LanguageContext';
 import VideoCall from './VideoCall';
 import AIAssistant from './AIAssistant';
 
-export default function GroupDetail({ group, onBack }) {
+export default function GroupDetail({ group, onBack, onNotify }) {
   const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState('chat');
+
+  const showNotification = (title, description, type = 'error') => {
+    if (typeof onNotify === 'function') {
+      onNotify(title, description, type);
+      return;
+    }
+
+    alert(`${title}\n${description}`);
+  };
 
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
@@ -151,12 +160,21 @@ export default function GroupDetail({ group, onBack }) {
   // --- פעולות חומרי לימוד ותיקיות ---
   const handleCreateFolder = async (e) => {
     e.preventDefault();
-    if (!newFolderName.trim() || !auth.currentUser) return;
+    if (!auth.currentUser) {
+      showNotification(t('error'), t('notAuthenticated'), 'error');
+      return;
+    }
+
+    const trimmedFolderName = newFolderName.trim();
+    if (!trimmedFolderName) {
+      showNotification(t('error'), t('folderNameRequired'), 'error');
+      return;
+    }
 
     try {
       const createdFolder = await createFolder({
         groupId: group.id,
-        name: newFolderName.trim(),
+        name: trimmedFolderName,
         parentId: currentFolderId,
         creatorId: auth.currentUser.uid,
       });
@@ -164,9 +182,10 @@ export default function GroupDetail({ group, onBack }) {
       setFolders(prev => [...prev, createdFolder]);
       setNewFolderName('');
       setShowFolderModal(false);
+      showNotification(t('folderCreated'), t('folderCreatedSuccess'), 'success');
     } catch (error) {
       console.error("Folder creation failed:", error);
-      alert("Failed to create folder. Please try again.");
+      showNotification(t('folderCreateFailed'), error.message || t('unknownServerError'), 'error');
     }
   };
 
