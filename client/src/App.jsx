@@ -15,8 +15,7 @@ import InvitationsList from './components/InvitationsList';
 import NotificationManager from './components/NotificationManager';
 import Settings from './components/Settings';
 
-// ייבוא אייקונים
-import { Plus, GraduationCap, Settings as SettingsIcon, ShieldAlert } from 'lucide-react';
+import { Plus, GraduationCap, Settings as SettingsIcon, ShieldAlert, CheckCircle2, AlertTriangle, Info as InfoIcon } from 'lucide-react';
 
 export default function App() {
   const { t, isRTL } = useLanguage();
@@ -26,6 +25,11 @@ export default function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
+
+  const handleGroupCreated = () => {
+    setGroupsRefreshKey(prev => prev + 1);
+  };
 
   // האזנה למצב המשתמש (מזהה התחברות והתנתקות בזמן אמת)
   useEffect(() => {
@@ -96,7 +100,7 @@ export default function App() {
       {/* תוכן מרכזי של הדשבורד */}
       <main className="pb-16">
         {selectedGroup ? (
-          <GroupDetail group={selectedGroup} onBack={() => setSelectedGroup(null)} />
+          <GroupDetail group={selectedGroup} onBack={() => setSelectedGroup(null)} showToast={showToast} />
         ) : (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 space-y-6">
             <InvitationsList />
@@ -111,31 +115,45 @@ export default function App() {
               </button>
             </div>
 
-            <GroupList onSelectGroup={setSelectedGroup} />
+            <GroupList key={groupsRefreshKey} onSelectGroup={setSelectedGroup} showToast={showToast} />
           </div>
         )}
       </main>
 
       {showSettingsModal && <Settings onClose={() => setShowSettingsModal(false)} />}
-      {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} />}
+      {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} onGroupCreated={handleGroupCreated} />}
 
       {/* מערכת התראות צפות */}
       <div className={`fixed bottom-6 z-50 flex flex-col gap-3 max-w-sm w-full p-4 ${isRTL ? 'left-6' : 'right-6'}`}>
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            onClick={() => handleToastClick(toast)}
-            className="bg-gray-900 text-white p-4 rounded-2xl shadow-2xl border border-gray-800 flex items-start gap-3 cursor-pointer hover:bg-gray-800 transition-all animate-slide-in"
-          >
-            <div className="p-1.5 bg-indigo-500 text-white rounded-lg mt-0.5">
-              <ShieldAlert size={16} />
+        {toasts.map(toast => {
+          let icon = <ShieldAlert size={16} />;
+          let iconBg = "bg-indigo-500";
+          if (toast.type === "success") {
+            icon = <CheckCircle2 size={16} />;
+            iconBg = "bg-emerald-500";
+          } else if (toast.type === "error") {
+            icon = <AlertTriangle size={16} />;
+            iconBg = "bg-rose-500";
+          } else if (toast.type === "info") {
+            icon = <InfoIcon size={16} />;
+            iconBg = "bg-blue-500";
+          }
+          return (
+            <div
+              key={toast.id}
+              onClick={() => handleToastClick(toast)}
+              className="bg-gray-900 text-white p-4 rounded-2xl shadow-2xl border border-gray-800 flex items-start gap-3 cursor-pointer hover:bg-gray-800 transition-all animate-slide-in"
+            >
+              <div className={`p-1.5 ${iconBg} text-white rounded-lg mt-0.5`}>
+                {icon}
+              </div>
+              <div className="flex-1 text-left">
+                <h4 className="text-xs font-bold text-white">{toast.title}</h4>
+                <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{toast.description}</p>
+              </div>
             </div>
-            <div className="flex-1 text-left">
-              <h4 className="text-xs font-bold text-white">{toast.title}</h4>
-              <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{toast.description}</p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
     </div>
