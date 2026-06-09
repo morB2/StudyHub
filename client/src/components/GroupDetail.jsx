@@ -3,23 +3,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
 import { 
   mockChatMessages, mockMaterials, mockMeetings, 
-  mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups 
+  mockNotices, mockFolders, mockInvitations, mockUsers
 } from '../mock/mockData';
 import { cn } from '../lib/utils';
 import { 
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X, 
   MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles, 
   Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight, 
-  Search, Move, Mic, Square, Play, Pause 
+  Search, Move, Mic, Square, Play, Pause, Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import VideoCall from './VideoCall';
 import AIAssistant from './AIAssistant';
+import { joinGroupApi, fetchGroupByIdApi, leaveGroupApi } from '../services/groupService';
 
 export default function GroupDetail({ group, onBack }) {
   const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState('chat');
+  const [groupDetails, setGroupDetails] = useState(group);
   
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
@@ -65,7 +67,17 @@ export default function GroupDetail({ group, onBack }) {
     }
   }, [messages, activeTab]);
 
-  const refreshAllData = () => {
+  const refreshAllData = async () => {
+    try {
+      const freshGroup = await fetchGroupByIdApi(group.id);
+      if (freshGroup) {
+        setGroupDetails(freshGroup);
+        setGroupMembers(freshGroup.memberDetails || []);
+      }
+    } catch (error) {
+      console.error("Error refreshing group details from API:", error);
+    }
+
     // 1. סינון הודעות צ'אט
     const filteredMsgs = mockChatMessages
       .filter(m => m.groupId === group.id)
@@ -84,11 +96,6 @@ export default function GroupDetail({ group, onBack }) {
 
     // 4. סינון לוח מודעות
     setNotices(mockNotices.filter(n => n.groupId === group.id));
-
-    // 5. חילוץ שמות ופרטי חברי הקבוצה מתוך ה-uids
-    const currentGroup = mockGroups.find(g => g.id === group.id) || group;
-    const membersList = mockUsers.filter(u => currentGroup.members.includes(u.uid));
-    setGroupMembers(membersList);
   };
 
   // --- פעולות צ'אט ---
@@ -266,27 +273,96 @@ export default function GroupDetail({ group, onBack }) {
     refreshAllData();
   };
 
-  const handleLeaveGroup = () => {
+  const handleLeaveGroup = async () => {
     if (!auth.currentUser) return;
     if (!window.confirm(t('confirmLeaveGroup'))) return;
 
-    const currentGroup = mockGroups.find(g => g.id === group.id);
-    if (currentGroup) {
-      currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
-      
-      // אם הקבוצה נשארה ריקה, נמחק אותה
-      if (currentGroup.members.length === 0) {
-        const idx = mockGroups.findIndex(g => g.id === group.id);
-        if (idx !== -1) mockGroups.splice(idx, 1);
-      }
+    try {
+      await leaveGroupApi(group.id, auth.currentUser.uid);
+      onBack();
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      alert("Error: " + error.message);
     }
-    onBack();
+  };
+
+  const isMember = auth.currentUser && (
+    groupDetails.members.includes(auth.currentUser.uid) ||
+    groupDetails.members.includes(Number(auth.currentUser.uid)) ||
+    groupDetails.members.includes(String(auth.currentUser.uid))
+  );
+
+  const handleJoinFromDetail = async () => {
+    if (!auth.currentUser) {
+      alert("Please sign in to join groups");
+      return;
+    }
+    const userId = auth.currentUser.uid;
+    try {
+      await joinGroupApi(group.id, userId);
+      await refreshAllData();
+    } catch (error) {
+      console.error("Error joining group from details:", error);
+      alert("Error: " + error.message);
+    }
   };
 
   // חישוב תיקיות וקבצים ברמה הנוכחית
   const currentFolders = folders.filter(f => f.parentId === currentFolderId);
   const currentMaterials = materials.filter(m => m.folderId === currentFolderId);
   const currentFolder = folders.find(f => f.id === currentFolderId);
+
+  if (!isMember) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center animate-fade-in">
+        <div className="bg-white border border-gray-100 rounded-3xl p-8 md:p-12 shadow-xl relative overflow-hidden">
+          {/* Decorative background gradients */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl"></div>
+          
+          <button 
+            onClick={onBack}
+            className="absolute top-6 left-6 p-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl transition-all cursor-pointer border border-gray-100"
+          >
+            <ArrowLeft size={18} className={isRTL ? "rotate-180" : ""} />
+          </button>
+
+          <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-indigo-100 shadow-inner">
+            <Lock size={36} className="text-indigo-600 animate-bounce" />
+          </div>
+
+          <h2 className="text-2xl font-black text-gray-900 mb-3 tracking-tight text-center">
+            {groupDetails.name}
+          </h2>
+          <div className="text-center mb-6">
+            <span className="text-indigo-600 font-bold text-sm bg-indigo-50/50 px-3 py-1.5 rounded-full inline-block">
+              {groupDetails.subject}
+            </span>
+          </div>
+
+          <p className="text-gray-500 text-sm max-w-md mx-auto mb-8 leading-relaxed text-center">
+            {t('notAMemberDesc')}
+          </p>
+
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <button
+              onClick={handleJoinFromDetail}
+              className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-2xl hover:from-indigo-700 hover:to-violet-700 transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm cursor-pointer"
+            >
+              <UserPlus size={18} />
+              <span>{t('joinGroup')}</span>
+            </button>
+            <button
+              onClick={onBack}
+              className="px-8 py-3.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-2xl hover:bg-gray-50 transition-all text-sm cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
@@ -302,14 +378,14 @@ export default function GroupDetail({ group, onBack }) {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-black text-gray-900">{group.name}</h1>
-              {group.isPrivate && (
+              <h1 className="text-2xl font-black text-gray-900">{groupDetails.name}</h1>
+              {groupDetails.isPrivate && (
                 <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full uppercase">
                   Private
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-400 mt-1">{group.subject} • {groupMembers.length} {t('members')}</p>
+            <p className="text-sm text-gray-400 mt-1">{groupDetails.subject} • {groupMembers.length} {t('members')}</p>
           </div>
         </div>
 
@@ -328,7 +404,7 @@ export default function GroupDetail({ group, onBack }) {
             <span>AI Study Assistant</span>
           </button>
 
-          {group.isPrivate && (
+          {groupDetails.isPrivate && (
             <button
               onClick={() => setShowInviteModal(true)}
               className="px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-100 flex items-center gap-2 transition-all cursor-pointer"
@@ -667,7 +743,7 @@ export default function GroupDetail({ group, onBack }) {
 
           {/* --- תוכן טאב 5: שיחת וידאו חיה --- */}
           {activeTab === 'video' && (
-            <VideoCall groupId={group.id} onLeave={() => setActiveTab('chat')} />
+            <VideoCall groupId={groupDetails.id} onLeave={() => setActiveTab('chat')} />
           )}
 
           {/* --- תוכן טאב 6: רשימת חברי הקבוצה וניהול עזיבה --- */}
@@ -691,7 +767,7 @@ export default function GroupDetail({ group, onBack }) {
                         <img src={member.photoURL} alt="" className="w-8 h-8 rounded-full border border-gray-200" />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 text-xs font-bold flex items-center justify-center uppercase">
-                          {member.displayName[0]}
+                          {member.displayName ? member.displayName[0] : '?'}
                         </div>
                       )}
                       <div>
@@ -699,7 +775,7 @@ export default function GroupDetail({ group, onBack }) {
                         <p className="text-[10px] text-gray-400">{member.email}</p>
                       </div>
                     </div>
-                    {member.uid === group.creatorId && (
+                    {(String(member.uid) === String(groupDetails.creatorId) || Number(member.uid) === Number(groupDetails.creatorId)) && (
                       <span className="text-[9px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
                     )}
                   </div>

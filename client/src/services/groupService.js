@@ -84,3 +84,17 @@ export const leaveGroupApi = async (groupId, userId) => {
 
   return response.json();
 };
+
+/**
+ * Fetches details of a specific study group from the backend.
+ * @param {string} groupId
+ * @returns {Promise<Object>} API JSON response containing group details and members list.
+ */
+export const fetchGroupByIdApi = async (groupId) => {
+  const response = await fetch(`${API_BASE}/${groupId}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch group details");
+  }
+  return response.json();
+};
+

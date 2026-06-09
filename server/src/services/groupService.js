@@ -105,7 +105,12 @@ export const getGroupById = async (id) => {
     .select(`
       *,
       group_members (
-        user_id
+        user_id,
+        users (
+          id,
+          name,
+          email
+        )
       )
     `)
     .eq("id", id)
@@ -126,6 +131,11 @@ export const getGroupById = async (id) => {
     isPrivate: data.is_private,
     createdAt: data.created_at,
     members: data.group_members ? data.group_members.map((m) => m.user_id) : [],
+    memberDetails: data.group_members ? data.group_members.map((m) => ({
+      uid: m.user_id,
+      displayName: m.users ? m.users.name : 'Unknown',
+      email: m.users ? m.users.email : '',
+    })) : [],
   };
 };
 

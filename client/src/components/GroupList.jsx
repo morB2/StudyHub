@@ -1,8 +1,7 @@
 // client/src/components/GroupList.jsx
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase';
-import { mockGroups } from '../mock/mockData';
-import { fetchGroupsApi, joinGroupApi, leaveGroupApi } from '../services/groupService';
+import { fetchGroupsApi, joinGroupApi, leaveGroupApi, fetchGroupByIdApi } from '../services/groupService';
 import { Users, BookOpen, Search, ArrowRight, UserPlus, UserMinus, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -13,7 +12,7 @@ export default function GroupList({ onSelectGroup }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Fetch groups from the server and sync with mock data
+  // Fetch groups from the server
   useEffect(() => {
     let active = true;
     const loadGroups = async () => {
@@ -21,9 +20,6 @@ export default function GroupList({ onSelectGroup }) {
         setLoading(true);
         const data = await fetchGroupsApi();
         if (active) {
-          // Sync in-memory mockGroups to maintain compatibility with other screens
-          mockGroups.length = 0;
-          mockGroups.push(...data);
           setGroups(data);
         }
       } catch (error) {
@@ -47,35 +43,25 @@ export default function GroupList({ onSelectGroup }) {
     }
 
     const userId = auth.currentUser.uid;
-    const isMember = group.members.includes(userId);
+    const isMember = group.members.includes(userId) || 
+                     group.members.includes(Number(userId)) || 
+                     group.members.includes(String(userId));
 
     try {
       if (isMember) {
         // Leave group API call
         await leaveGroupApi(group.id, userId);
 
-        // Update local mockData in-memory array
-        const currentGroup = mockGroups.find(g => g.id === group.id);
-        if (currentGroup) {
-          currentGroup.members = currentGroup.members.filter(uid => uid !== userId);
-        }
-
         // Update state
         setGroups(prev => prev.map(g => {
           if (g.id === group.id) {
-            return { ...g, members: g.members.filter(uid => uid !== userId) };
+            return { ...g, members: g.members.filter(uid => String(uid) !== String(userId)) };
           }
           return g;
         }));
       } else {
         // Join group API call
         await joinGroupApi(group.id, userId);
-
-        // Update local mockData in-memory array
-        const currentGroup = mockGroups.find(g => g.id === group.id);
-        if (currentGroup) {
-          currentGroup.members.push(userId);
-        }
 
         // Update state
         setGroups(prev => prev.map(g => {
@@ -91,9 +77,41 @@ export default function GroupList({ onSelectGroup }) {
     }
   };
 
+  const handleJoinAndSelect = async (group) => {
+    if (!auth.currentUser) {
+      alert("Please sign in to join groups");
+      return;
+    }
+    const userId = auth.currentUser.uid;
+    try {
+      await joinGroupApi(group.id, userId);
+
+      // Fetch the fresh group details directly from the API
+      const updatedGroup = await fetchGroupByIdApi(group.id);
+
+      // Update state
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return updatedGroup;
+        }
+        return g;
+      }));
+
+      // Select group immediately
+      onSelectGroup(updatedGroup);
+    } catch (error) {
+      console.error("Error joining group:", error);
+      alert("Error: " + error.message);
+    }
+  };
+
   // סינון ופיקוח על הטרמינל
   const filteredGroups = groups.filter(g => {
-    const isMember = auth.currentUser && g.members.includes(auth.currentUser.uid);
+    const isMember = auth.currentUser && (
+      g.members.includes(auth.currentUser.uid) ||
+      g.members.includes(Number(auth.currentUser.uid)) ||
+      g.members.includes(String(auth.currentUser.uid))
+    );
     const isPublic = !g.isPrivate;
     const matchesSearch = 
       g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -120,7 +138,22 @@ export default function GroupList({ onSelectGroup }) {
             return (
               <div 
                 key={group.id}
-                onClick={() => onSelectGroup(group)}
+                onClick={async () => {
+                  if (isMember) {
+                    try {
+                      const freshGroup = await fetchGroupByIdApi(group.id);
+                      onSelectGroup(freshGroup);
+                    } catch (err) {
+                      console.error("Error fetching fresh group details:", err);
+                      onSelectGroup(group);
+                    }
+                  } else {
+                    const confirmJoin = window.confirm(t('confirmJoinPrompt') || "To enter the group and view its materials, you must be registered. Would you like to join and enter?");
+                    if (confirmJoin) {
+                      handleJoinAndSelect(group);
+                    }
+                  }
+                }}
                 className="group bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
               >
                 <div>
