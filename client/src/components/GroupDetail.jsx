@@ -17,11 +17,29 @@ import { useLanguage } from '../contexts/LanguageContext';
 import VideoCall from './VideoCall';
 import AIAssistant from './AIAssistant';
 import { joinGroupApi, fetchGroupByIdApi, leaveGroupApi } from '../services/groupService';
+import ConfirmModal from './ConfirmModal';
 
-export default function GroupDetail({ group, onBack }) {
+export default function GroupDetail({ group, onBack, showToast }) {
   const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState('chat');
   const [groupDetails, setGroupDetails] = useState(group);
+
+  // Reusable confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    icon: null,
+    type: 'indigo'
+  });
+
+  const triggerConfirm = (params) => {
+    setConfirmModal({
+      isOpen: true,
+      ...params
+    });
+  };
   
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
@@ -190,20 +208,26 @@ export default function GroupDetail({ group, onBack }) {
   };
 
   const handleDeleteMaterial = (id, type) => {
-    if (!window.confirm(t('deleteConfirm'))) return;
-
-    if (type === 'folder') {
-      const idx = mockFolders.findIndex(f => f.id === id);
-      if (idx !== -1) mockFolders.splice(idx, 1);
-      // העברת קבצים שהיו בתיקייה לתיקיית האב
-      mockMaterials.forEach(m => {
-        if (m.folderId === id) m.folderId = null;
-      });
-    } else {
-      const idx = mockMaterials.findIndex(m => m.id === id);
-      if (idx !== -1) mockMaterials.splice(idx, 1);
-    }
-    refreshAllData();
+    triggerConfirm({
+      title: t('deleteConfirm') || "Delete Item",
+      message: t('deleteConfirm') || "Are you sure you want to delete this?",
+      icon: Trash2,
+      type: 'danger',
+      onConfirm: () => {
+        if (type === 'folder') {
+          const idx = mockFolders.findIndex(f => f.id === id);
+          if (idx !== -1) mockFolders.splice(idx, 1);
+          // העברת קבצים שהיו בתיקייה לתיקיית האב
+          mockMaterials.forEach(m => {
+            if (m.folderId === id) m.folderId = null;
+          });
+        } else {
+          const idx = mockMaterials.findIndex(m => m.id === id);
+          if (idx !== -1) mockMaterials.splice(idx, 1);
+        }
+        refreshAllData();
+      }
+    });
   };
 
   // --- פעולות מפגשים ---
@@ -269,21 +293,29 @@ export default function GroupDetail({ group, onBack }) {
     mockInvitations.push(invite);
     setInviteEmail('');
     setShowInviteModal(false);
-    alert(t('inviteSent'));
+    showToast(t('inviteSent'), "", "success");
     refreshAllData();
   };
 
   const handleLeaveGroup = async () => {
     if (!auth.currentUser) return;
-    if (!window.confirm(t('confirmLeaveGroup'))) return;
 
-    try {
-      await leaveGroupApi(group.id, auth.currentUser.uid);
-      onBack();
-    } catch (error) {
-      console.error("Error leaving group:", error);
-      alert("Error: " + error.message);
-    }
+    triggerConfirm({
+      title: t('leaveGroup') || "Leave Group",
+      message: t('confirmLeaveGroup') || "Are you sure you want to leave this group?",
+      icon: UserMinus,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await leaveGroupApi(group.id, auth.currentUser.uid);
+          showToast(t('leaveGroup') || "Leave Group", t('leftGroup') || "Successfully left the group!", "success");
+          onBack();
+        } catch (error) {
+          console.error("Error leaving group:", error);
+          showToast(t('error') || "Error", error.message, "error");
+        }
+      }
+    });
   };
 
   const isMember = auth.currentUser && (
@@ -294,16 +326,17 @@ export default function GroupDetail({ group, onBack }) {
 
   const handleJoinFromDetail = async () => {
     if (!auth.currentUser) {
-      alert("Please sign in to join groups");
+      showToast("Authentication Required", "Please sign in to join groups", "error");
       return;
     }
     const userId = auth.currentUser.uid;
     try {
       await joinGroupApi(group.id, userId);
+      showToast(t('joinGroup') || "Join Group", t('joinedGroup') || "Successfully joined the group!", "success");
       await refreshAllData();
     } catch (error) {
       console.error("Error joining group from details:", error);
-      alert("Error: " + error.message);
+      showToast(t('error') || "Error", error.message, "error");
     }
   };
 
@@ -838,6 +871,16 @@ export default function GroupDetail({ group, onBack }) {
         </div>
       )}
 
+      {/* Reusable Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        type={confirmModal.type}
+      />
     </div>
   );
 }

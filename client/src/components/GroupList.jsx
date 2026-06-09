@@ -5,12 +5,30 @@ import { fetchGroupsApi, joinGroupApi, leaveGroupApi, fetchGroupByIdApi } from '
 import { Users, BookOpen, Search, ArrowRight, UserPlus, UserMinus, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
+import ConfirmModal from './ConfirmModal';
 
-export default function GroupList({ onSelectGroup }) {
+export default function GroupList({ onSelectGroup, showToast }) {
   const { t, isRTL } = useLanguage();
   const [groups, setGroups] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Reusable confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    icon: null,
+    type: 'indigo'
+  });
+
+  const triggerConfirm = (params) => {
+    setConfirmModal({
+      isOpen: true,
+      ...params
+    });
+  };
 
   // Fetch groups from the server
   useEffect(() => {
@@ -34,11 +52,43 @@ export default function GroupList({ onSelectGroup }) {
     return () => { active = false; };
   }, []);
 
+  const proceedJoin = async (group, userId) => {
+    try {
+      await joinGroupApi(group.id, userId);
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return { ...g, members: [...g.members, userId] };
+        }
+        return g;
+      }));
+      showToast(t('joinGroup'), t('joinedGroup'), "success");
+    } catch (error) {
+      console.error("Error joining group:", error);
+      showToast(t('error') || "Error", error.message, "error");
+    }
+  };
+
+  const proceedLeave = async (group, userId) => {
+    try {
+      await leaveGroupApi(group.id, userId);
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return { ...g, members: g.members.filter(uid => String(uid) !== String(userId)) };
+        }
+        return g;
+      }));
+      showToast(t('leaveGroup'), t('leftGroup'), "success");
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      showToast(t('error') || "Error", error.message, "error");
+    }
+  };
+
   // Update membership status using API
   const handleJoinLeave = async (e, group) => {
     e.stopPropagation();
     if (!auth.currentUser) {
-      alert("Please sign in to join groups");
+      showToast("Authentication Required", "Please sign in to join groups", "error");
       return;
     }
 
@@ -47,39 +97,28 @@ export default function GroupList({ onSelectGroup }) {
                      group.members.includes(Number(userId)) || 
                      group.members.includes(String(userId));
 
-    try {
-      if (isMember) {
-        // Leave group API call
-        await leaveGroupApi(group.id, userId);
-
-        // Update state
-        setGroups(prev => prev.map(g => {
-          if (g.id === group.id) {
-            return { ...g, members: g.members.filter(uid => String(uid) !== String(userId)) };
-          }
-          return g;
-        }));
-      } else {
-        // Join group API call
-        await joinGroupApi(group.id, userId);
-
-        // Update state
-        setGroups(prev => prev.map(g => {
-          if (g.id === group.id) {
-            return { ...g, members: [...g.members, userId] };
-          }
-          return g;
-        }));
-      }
-    } catch (error) {
-      console.error("Error joining/leaving group:", error);
-      alert("Error: " + error.message);
+    if (isMember) {
+      triggerConfirm({
+        title: t('leaveGroup') || "Leave Group",
+        message: t('confirmLeaveGroup') || "Are you sure you want to leave this group?",
+        icon: UserMinus,
+        type: 'danger',
+        onConfirm: () => proceedLeave(group, userId)
+      });
+    } else {
+      triggerConfirm({
+        title: t('joinGroup') || "Join Group",
+        message: t('confirmJoinPrompt') || "Are you sure you want to join this group?",
+        icon: UserPlus,
+        type: 'indigo',
+        onConfirm: () => proceedJoin(group, userId)
+      });
     }
   };
 
   const handleJoinAndSelect = async (group) => {
     if (!auth.currentUser) {
-      alert("Please sign in to join groups");
+      showToast("Authentication Required", "Please sign in to join groups", "error");
       return;
     }
     const userId = auth.currentUser.uid;
@@ -97,11 +136,13 @@ export default function GroupList({ onSelectGroup }) {
         return g;
       }));
 
+      showToast(t('joinGroup'), t('joinedGroup'), "success");
+
       // Select group immediately
       onSelectGroup(updatedGroup);
     } catch (error) {
       console.error("Error joining group:", error);
-      alert("Error: " + error.message);
+      showToast(t('error') || "Error", error.message, "error");
     }
   };
 
@@ -148,10 +189,13 @@ export default function GroupList({ onSelectGroup }) {
                       onSelectGroup(group);
                     }
                   } else {
-                    const confirmJoin = window.confirm(t('confirmJoinPrompt') || "To enter the group and view its materials, you must be registered. Would you like to join and enter?");
-                    if (confirmJoin) {
-                      handleJoinAndSelect(group);
-                    }
+                    triggerConfirm({
+                      title: t('joinGroup') || "Join Group",
+                      message: t('confirmJoinPrompt') || "To enter the group and view its materials, you must be registered. Would you like to join and enter?",
+                      icon: UserPlus,
+                      type: 'indigo',
+                      onConfirm: () => handleJoinAndSelect(group)
+                    });
                   }
                 }}
                 className="group bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
@@ -248,6 +292,17 @@ export default function GroupList({ onSelectGroup }) {
           <p className="text-gray-500 max-w-xs mx-auto">{t('noGroupsDesc')}</p>
         </div>
       )}
+
+      {/* Reusable Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        type={confirmModal.type}
+      />
     </div>
   );
 }
