@@ -3,15 +3,13 @@
 import { useState, useEffect } from "react";
 import {
   auth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from "../firebase";
 import { LogIn, LogOut, Mail, Lock, X } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 
-export default function Auth({ onClose, mode = "all" }) {
+export default function Auth({ onClose, mode = "all", onProfileClick }) {
   const { isRTL } = useLanguage();
   const [user, setUser] = useState(auth.currentUser);
 
@@ -84,8 +82,8 @@ export default function Auth({ onClose, mode = "all" }) {
         localStorage.setItem("studybuddy_token", data.token); 
 
         if (onClose) onClose();
-      window.location.reload();
-}
+        window.location.reload();
+      }
     } catch (err) {
       setError(err.message || "Authentication failed.");
     }
@@ -124,7 +122,7 @@ export default function Auth({ onClose, mode = "all" }) {
     }, 1000);
   };
 
-  const handleLogout = async () => {
+const handleLogout = async () => {
     try {
       // 1. מחיקת נתוני המשתמש והטוקן מה-Local Storage כדי שהדפדפן ישכח אותם
       localStorage.removeItem("studybuddy_user");
@@ -136,18 +134,23 @@ export default function Auth({ onClose, mode = "all" }) {
       }
 
       // 3. רענון העמוד - עכשיו האפליקציה תעלה מחדש, תראה שה-Local Storage ריק ותחזיר לעמוד הנחיתה
-    window.location.reload();
-} catch (err) {
+      window.location.reload();
+    } catch (err) {
       console.error("Logout error:", err);
     }
   };
-
   // מניעת כפל ויזואלי: אם אנחנו בתוך עמוד הנחיתה כמודאל, לא נרנדר את כפתור הפרופיל הראשי
-  if (user && mode === "navbarOnly") {
+if (user && mode === "navbarOnly") {
+    // משיכת השם מהשדה המעודכן, או מ-displayName הישן
+    const userName = user.name || user.displayName || "משתמש";
+    // משיכת התמונה - ב-Supabase שמרנו את זה בתור photoURL
+    const userPhoto = user.photoURL || user.avatar;
+
     return (
       <div className="flex items-center gap-3 bg-gray-50/80 px-4 py-2 rounded-2xl border border-gray-100">
         <div className={isRTL ? "text-right" : "text-left"}>
-          <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
+          {/* הוספנו את המילה 'הי,' לפני השם */}
+          <p className="text-xs font-bold text-gray-900">הי, {userName}</p>
           <button
             onClick={handleLogout}
             className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer mt-0.5"
@@ -156,9 +159,24 @@ export default function Auth({ onClose, mode = "all" }) {
             <span>התנתק</span>
           </button>
         </div>
-        <div className="w-9 h-9 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-          {user.avatar ||
-            (user.displayName ? user.displayName.substring(0, 2) : "יי")}
+        
+        {/* העיגול של הפרופיל */}
+        <div 
+          onClick={onProfileClick}
+          // הוספנו overflow-hidden כדי שהתמונה לא תגלוש מחוץ לעיגול
+          className="w-9 h-9 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer hover:bg-indigo-700 transition-all overflow-hidden"
+        >
+          {userPhoto ? (
+            // אם יש תמונה, נציג אותה
+            <img 
+              src={userPhoto} 
+              alt={userName} 
+              className="w-full h-full object-cover" 
+            />
+          ) : (
+            // אם אין תמונה, נציג את 2 האותיות הראשונות של השם
+            userName.substring(0, 2)
+          )}
         </div>
       </div>
     );
@@ -219,7 +237,7 @@ export default function Auth({ onClose, mode = "all" }) {
               <input
                 type="password"
                 required
-minLength={4} 
+                minLength={4} 
                 placeholder="••••••••"
                 className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
                 value={password}
@@ -254,7 +272,7 @@ minLength={4}
             alt="Google"
             className="w-4 h-4"
           />
-          <span>Sign in with Google</span>
+          <span>Sign in with google</span>
         </button>
 
         <div className="text-center pt-2">

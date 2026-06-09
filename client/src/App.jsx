@@ -14,7 +14,7 @@ import GroupDetail from './components/GroupDetail';
 import InvitationsList from './components/InvitationsList';
 import NotificationManager from './components/NotificationManager';
 import Settings from './components/Settings';
-
+import ProfileModal from './components/ProfileModal';
 // ייבוא אייקונים
 import { Plus, GraduationCap, Settings as SettingsIcon, ShieldAlert } from 'lucide-react';
 
@@ -26,7 +26,7 @@ export default function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [toasts, setToasts] = useState([]);
-
+  const [showProfileModal, setShowProfileModal] = useState(false); // הסטייט החדש!
   // האזנה למצב המשתמש (מזהה התחברות והתנתקות בזמן אמת)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -89,7 +89,8 @@ export default function App() {
           </button>
           
           {/* כפתור פרופיל והתנתקות בקצה ה-Navbar */}
-          <Auth mode="navbarOnly" />
+          <Auth mode="navbarOnly"
+           onProfileClick={() => setShowProfileModal(true)}/>
         </div>
       </header>
 
@@ -118,7 +119,7 @@ export default function App() {
 
       {showSettingsModal && <Settings onClose={() => setShowSettingsModal(false)} />}
       {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} />}
-
+{showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
       {/* מערכת התראות צפות */}
       <div className={`fixed bottom-6 z-50 flex flex-col gap-3 max-w-sm w-full p-4 ${isRTL ? 'left-6' : 'right-6'}`}>
         {toasts.map(toast => (

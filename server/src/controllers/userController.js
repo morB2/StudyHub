@@ -2,10 +2,8 @@ import { createUser, getAllUsers, verifyUser, updateUserProfile } from "../servi
 
 export const addUser = async (req, res) => {
   try {
-    // קליטת כל השדות מהבקשה
     const { name, email, password } = req.body;
 
-    // וידוא שכל שדות החובה קיימים
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
     }
@@ -46,5 +44,24 @@ export const loginUser = async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     res.status(status).json({ error: error.message });
+  }
+};
+
+export const editUser = async (req, res) => {
+  try {
+    // הוספנו את name לכאן:
+    const { id, name, bio, institution, photoURL } = req.body;
+    const file = req.file;
+
+    if (!id) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    // הוספנו את name גם לקריאה של הפונקציה:
+    const updatedUser = await updateUserProfile({ id, name, bio, institution, photoURL, file });
+
+    res.status(200).json({ message: "Profile updated successfully", user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
