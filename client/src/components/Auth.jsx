@@ -125,8 +125,21 @@ export default function Auth({ onClose, mode = "all" }) {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    try {
+      // 1. מחיקת נתוני המשתמש והטוקן מה-Local Storage כדי שהדפדפן ישכח אותם
+      localStorage.removeItem("studybuddy_user");
+      localStorage.removeItem("studybuddy_token");
+
+      // 2. איפוס אובייקט המשתמש המקומי בזיכרון של ה-Auth
+      if (auth) {
+        auth.currentUser = null;
+      }
+
+      // 3. רענון העמוד - עכשיו האפליקציה תעלה מחדש, תראה שה-Local Storage ריק ותחזיר לעמוד הנחיתה
     window.location.reload();
+} catch (err) {
+      console.error("Logout error:", err);
+    }
   };
 
   // מניעת כפל ויזואלי: אם אנחנו בתוך עמוד הנחיתה כמודאל, לא נרנדר את כפתור הפרופיל הראשי
@@ -137,7 +150,7 @@ export default function Auth({ onClose, mode = "all" }) {
           <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
           <button
             onClick={handleLogout}
-            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer"
+            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer mt-0.5"
           >
             <LogOut size={12} />
             <span>התנתק</span>

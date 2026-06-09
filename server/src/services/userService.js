@@ -11,16 +11,8 @@ const hashPassword = (password) => {
 
 export const createUser = async ({ name, email, password }) => {
   // בדיקה אם המייל כבר קיים (מניעת race-condition ברמת השרת)
-  const existingRes = await supabase
-    .from("users")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (existingRes.error) {
-    throw new Error(
-      existingRes.error.message || "Failed checking existing email",
-    );
+  const existingRes = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+  if (existingRes.error) throw new Error(existingRes.error.message || "Failed checking existing email");
   }
 
   if (existingRes.data) {
@@ -32,10 +24,7 @@ export const createUser = async ({ name, email, password }) => {
   // הכנסת כל השדות לטבלה (סיסמה כבר מתחוללת)
   const hashedPassword = hashPassword(password);
 
-  const { data, error } = await supabase
-    .from("users")
-    .insert([{ name, email, password: hashedPassword }])
-    .select();
+  const { data, error } = await supabase.from("users").insert([{ name, email, password: hashedPassword }]).select();
 
   if (error) {
     // Postgres unique violation code is '23505'
@@ -53,8 +42,7 @@ export const createUser = async ({ name, email, password }) => {
 export const getAllUsers = async () => {
   const { data, error } = await supabase.from("users").select("*");
 
-  if (error) {
-    throw new Error(error.message);
+  if (error) throw new Error(error.message);
   }
 
   return data;
