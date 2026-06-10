@@ -6,11 +6,16 @@ import { Users, BookOpen, Search, ArrowRight, UserPlus, UserMinus, Lock } from '
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import ConfirmModal from './ConfirmModal';
+import GroupFilters from './GroupFilters';
 
 export default function GroupList({ onSelectGroup, showToast }) {
   const { t, isRTL } = useLanguage();
   const [groups, setGroups] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    search: '',
+    subject: '',
+    sortBy: 'newest'
+  });
   const [loading, setLoading] = useState(true);
 
   // Reusable confirmation modal state
@@ -155,14 +160,30 @@ export default function GroupList({ onSelectGroup, showToast }) {
     );
     const isPublic = !g.isPrivate;
     const matchesSearch = 
-      g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      g.subject.toLowerCase().includes(searchTerm.toLowerCase());
+      !filters.search ||
+      g.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      g.subject.toLowerCase().includes(filters.search.toLowerCase());
     
-    return matchesSearch && (isPublic || isMember);
+    const matchesSubject = 
+      !filters.subject ||
+      g.subject === filters.subject;
+    
+    return matchesSearch && matchesSubject && (isPublic || isMember);
   });
 
-  const myGroups = filteredGroups.filter(g => auth.currentUser && g.members.includes(auth.currentUser.uid));
-  const discoverGroups = filteredGroups.filter(g => !auth.currentUser || !g.members.includes(auth.currentUser.uid));
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    if (filters.sortBy === 'alphabetical') {
+      return a.name.localeCompare(b.name);
+    } else if (filters.sortBy === 'popular') {
+      return (b.members?.length || 0) - (a.members?.length || 0);
+    } else {
+      // Default: newest
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    }
+  });
+
+  const myGroups = sortedGroups.filter(g => auth.currentUser && g.members.includes(auth.currentUser.uid));
+  const discoverGroups = sortedGroups.filter(g => !auth.currentUser || !g.members.includes(auth.currentUser.uid));
 
   // תת-קומפוננטה פנימית להצגת הגריד המעוצב שלך
   const GroupGrid = ({ groups, title }) => {
@@ -251,8 +272,10 @@ export default function GroupList({ onSelectGroup, showToast }) {
     );
   };
 
+  const uniqueSubjects = Array.from(new Set(groups.map(g => g.subject).filter(Boolean)));
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3">
           <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-100">
@@ -260,17 +283,13 @@ export default function GroupList({ onSelectGroup, showToast }) {
           </div>
           {t('groupStudy' || 'Study Groups')}
         </h2>
-        <div className="relative max-w-md w-full">
-          <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isRTL ? 'right-3' : 'left-3'}`} size={18} />
-          <input
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            className={`w-full py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'}`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
       </div>
+
+      <GroupFilters 
+        subjects={uniqueSubjects}
+        filters={filters}
+        onFilterChange={setFilters}
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
