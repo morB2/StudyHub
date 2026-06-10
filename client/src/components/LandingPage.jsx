@@ -20,7 +20,7 @@ export default function LandingPage() {
           onClick={() => setShowAuthModal(true)}
           className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2 text-sm cursor-pointer"
         >
-          <span>Sign in with Google</span>
+          <span>Sign in</span>
         </button>
       </header>
 

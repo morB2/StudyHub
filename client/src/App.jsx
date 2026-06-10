@@ -93,7 +93,8 @@ export default function App() {
           </button>
           
           {/* כפתור פרופיל והתנתקות בקצה ה-Navbar */}
-          <Auth mode="navbarOnly" />
+          <Auth mode="navbarOnly"
+           onProfileClick={() => setShowProfileModal(true)}/>
         </div>
       </header>
 
