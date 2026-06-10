@@ -6,12 +6,13 @@ import {
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup } from '../services/folderService';
+import { uploadMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
   MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles,
   Video, UserPlus, UserMinus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
-  Search, Move, Mic, Square, Play, Pause, Lock
+  Search, Move, Mic, Square, Play, Pause, Lock, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -43,6 +44,10 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [newMessage, setNewMessage] = useState('');
   const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialUrl, setNewMaterialUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
+  const fileInputRef = useRef(null);
   const [meetingTitle, setMeetingTitle] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
   const [meetingTime, setMeetingTime] = useState('');
@@ -259,24 +264,112 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
-  const handleUploadMaterial = (e) => {
-    e.preventDefault();
-    if (!newMaterialName.trim() || !newMaterialUrl.trim() || !auth.currentUser) return;
-
-    const material = {
-      id: 'mat_' + Math.random().toString(36).substr(2, 9),
-      groupId: groupDetails.id,
-      uploaderId: auth.currentUser.uid,
-      fileName: newMaterialName.trim(),
-      fileUrl: newMaterialUrl.trim(),
-      folderId: currentFolderId,
-      createdAt: new Date()
-    };
-
-    mockMaterials.push(material);
-    setNewMaterialName('');
+  const handleFileSelection = (file) => {
+    if (!file) return;
+    setSelectedFile(file);
+    setNewMaterialName(file.name);
     setNewMaterialUrl('');
-    refreshAllData();
+  };
+
+  const handleInputFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelection(file);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileSelection(file);
+    }
+  };
+
+  const openFilePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setNewMaterialUrl('');
+  };
+
+  const handleUploadMaterial = async (e) => {
+    e.preventDefault();
+    if (!newMaterialName.trim() || !auth.currentUser) return;
+    if (!selectedFile && !newMaterialUrl.trim()) return;
+
+    setUploadingMaterial(true);
+    try {
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('file_name', newMaterialName.trim());
+        formData.append('group_id', groupDetails.id);
+        if (currentFolderId) {
+          formData.append('folder_id', currentFolderId);
+        }
+        formData.append('uploader_id', auth.currentUser.uid);
+
+        const response = await uploadMaterialApi(formData);
+        const uploadedMaterial = response.material || response.data || response;
+        const fallbackFileUrl = URL.createObjectURL(selectedFile);
+
+        if (uploadedMaterial) {
+          const newMaterial = {
+            id: uploadedMaterial.id || 'mat_' + Math.random().toString(36).substr(2, 9),
+            groupId: groupDetails.id,
+            uploaderId: auth.currentUser.uid,
+            fileName: uploadedMaterial.fileName || newMaterialName.trim(),
+            fileUrl: uploadedMaterial.fileUrl || fallbackFileUrl,
+            folderId: uploadedMaterial.folderId ?? currentFolderId,
+            createdAt: uploadedMaterial.createdAt ? new Date(uploadedMaterial.createdAt) : new Date(),
+            storagePath: uploadedMaterial.storagePath,
+          };
+
+          mockMaterials.push(newMaterial);
+          setMaterials(prev => [...prev, newMaterial]);
+        }
+      } else {
+        const material = {
+          id: 'mat_' + Math.random().toString(36).substr(2, 9),
+          groupId: groupDetails.id,
+          uploaderId: auth.currentUser.uid,
+          fileName: newMaterialName.trim(),
+          fileUrl: newMaterialUrl.trim(),
+          folderId: currentFolderId,
+          createdAt: new Date(),
+          localUpload: false,
+        };
+
+        mockMaterials.push(material);
+        setMaterials(prev => [...prev, material]);
+      }
+
+      setNewMaterialName('');
+      setNewMaterialUrl('');
+      setSelectedFile(null);
+      refreshAllData();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      notify(t('error') || 'Error', error.message || 'Upload failed', 'error');
+    } finally {
+      setUploadingMaterial(false);
+    }
   };
 
   const handleMoveMaterial = (materialId, folderId) => {
@@ -706,24 +799,83 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     {t('uploadMaterial')}
                   </h3>
                   <form onSubmit={handleUploadMaterial} className="space-y-4">
+                    <div
+                      className={cn(
+                        "rounded-3xl border border-dashed p-5 text-center transition-all cursor-pointer",
+                        dragActive
+                          ? "border-indigo-400 bg-indigo-50"
+                          : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-white"
+                      )}
+                      onClick={openFilePicker}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={handleInputFileChange}
+                      />
+                      <p className="text-sm font-semibold text-gray-700">{selectedFile ? selectedFile.name : 'Drag & drop a file here'}</p>
+                      <p className="text-xs text-gray-400 mt-1">or click to browse from your computer</p>
+                    </div>
+
+                    {selectedFile ? (
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-left text-sm text-gray-700 space-y-2">
+                        <p className="font-bold text-gray-900">Selected file</p>
+                        <p className="text-gray-600 truncate">{selectedFile.name}</p>
+                        <button
+                          type="button"
+                          onClick={clearSelectedFile}
+                          className="text-indigo-600 text-xs font-bold hover:underline"
+                        >
+                          Remove file
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileUrl')}</label>
+                        <input
+                          type="url"
+                          placeholder="https://drive.google.com/..."
+                          className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                          value={newMaterialUrl}
+                          onChange={(e) => setNewMaterialUrl(e.target.value)}
+                        />
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileName')}</label>
                       <input
-                        type="text" required placeholder="e.g. Summary Lesson 4"
+                        type="text"
+                        required
+                        placeholder="e.g. Summary Lesson 4"
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                        value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)}
+                        value={newMaterialName}
+                        onChange={(e) => setNewMaterialName(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileUrl')}</label>
-                      <input
-                        type="url" required placeholder="https://drive.google.com/..."
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                        value={newMaterialUrl} onChange={(e) => setNewMaterialUrl(e.target.value)}
-                      />
-                    </div>
-                    <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer">
-                      {t('share')}
+
+                    <button
+                      type="submit"
+                      disabled={uploadingMaterial}
+                      className={cn(
+                        "w-full py-3 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer",
+                        uploadingMaterial
+                          ? "bg-indigo-400 cursor-not-allowed"
+                          : "bg-indigo-600 hover:bg-indigo-700"
+                      )}
+                    >
+                      {uploadingMaterial ? (
+                        <span className="inline-flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading...
+                        </span>
+                      ) : (
+                        t('share')
+                      )}
                     </button>
                   </form>
                 </div>

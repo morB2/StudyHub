@@ -4,6 +4,7 @@ import userRoutes from "./routes/userRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import materialRoutes from "./routes/materialRoutes.js";
 
 const app = express();
 
@@ -13,5 +14,6 @@ app.use("/users", userRoutes);
 app.use("/folders", folderRoutes);
 app.use("/groups", groupRoutes);
 app.use("/auth", authRoutes);
+app.use("/materials", materialRoutes);
 
 export default app;
