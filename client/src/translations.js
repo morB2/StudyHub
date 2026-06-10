@@ -78,6 +78,7 @@ export const translations = {
     decline: "Decline",
     noInvitations: "No pending invitations.",
     joinedGroup: "Successfully joined the group!",
+    leftGroup: "Successfully left the group!",
     myGroups: "My Groups",
     discoverGroups: "Discover New Groups",
     groupMembers: "Group Members",
@@ -109,7 +110,10 @@ export const translations = {
     alreadyHaveAccount: "Already have an account?",
     authOperationNotAllowed: "Operation not allowed.",
     newChatMessage: "New Message",
-    newMeetingScheduled: "New Meeting Scheduled"
+    newMeetingScheduled: "New Meeting Scheduled",
+    notAMember: "Not a member",
+    notAMemberDesc: "Only registered members of this study group can view its chat, schedule, and study materials. Join the group to start collaborating!",
+    confirmJoinPrompt: "To enter the group and view its materials, you must be registered. Would you like to join and enter?"
   },
   he: {
     appName: "StudyHub",
@@ -187,6 +191,7 @@ export const translations = {
     decline: "דחייה",
     noInvitations: "אין הזמנות ממתינות.",
     joinedGroup: "הצטרפת לקבוצה בהצלחה!",
+    leftGroup: "עזבת את הקבוצה בהצלחה!",
     myGroups: "הקבוצות שלי",
     discoverGroups: "גלה קבוצות חדשות",
     groupMembers: "חברי הקבוצה",
@@ -219,6 +224,9 @@ export const translations = {
     alreadyHaveAccount: "כבר יש לך חשבון?",
     authOperationNotAllowed: "הפעולה אינה מורשית.",
     newChatMessage: "הודעה חדשה בצ'אט",
-    newMeetingScheduled: "נקבע מפגש קבוצתי חדש"
+    newMeetingScheduled: "נקבע מפגש קבוצתי חדש",
+    notAMember: "אינך חבר בקבוצה",
+    notAMemberDesc: "רק חברים הרשומים לקבוצת לימוד זו יכולים לצפות בצ'אט, בלוח המפגשים ובחומרי הלימוד. הצטרפו לקבוצה כדי להתחיל לשתף פעולה!",
+    confirmJoinPrompt: "על מנת להיכנס לקבוצה ולראות את החומרים עליך להיות רשום אליה. האם להצטרף כעת ולהיכנס?"
   }
 };

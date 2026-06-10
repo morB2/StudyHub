@@ -5,8 +5,9 @@ import { mockGroups } from '../mock/mockData';
 import { cn } from '../lib/utils';
 import { X, Plus, BookOpen, FileText, Lock, Globe } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { createGroupApi } from '../services/groupService';
 
-export default function CreateGroup({ onClose }) {
+export default function CreateGroup({ onClose, onGroupCreated }) {
   const { t } = useLanguage();
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
@@ -20,27 +21,28 @@ export default function CreateGroup({ onClose }) {
     setLoading(true);
 
     try {
-      // יצירת מזהה ייחודי מדומה לקבוצה החדשה
-      const generatedId = 'group_' + Math.random().toString(36).substr(2, 9);
-      
-      const newGroup = {
-        id: generatedId,
+      // Call backend API to create group and store in Supabase
+      const apiResponse = await createGroupApi({
         name,
         subject,
         description,
-        creatorId: auth.currentUser.uid,
-        members: [auth.currentUser.uid],
         isPrivate,
-        createdAt: new Date() // שימוש בתאריך רגיל במקום Timestamp של פיירבייס
-      };
+        creatorId: auth.currentUser.uid
+      });
 
-      // דחיפת הקבוצה החדשה למערך הגלובלי המדומה
+      const newGroup = apiResponse.data;
+
+      // Push to in-memory mockGroups to maintain compatibility with other mock features
       mockGroups.push(newGroup);
-      console.log("Mock Group Created Successfully:", newGroup);
+      console.log("Group Created Successfully via API:", newGroup);
       
+      if (onGroupCreated) {
+        onGroupCreated(newGroup);
+      }
       onClose();
     } catch (error) {
       console.error('Error creating group:', error);
+      alert('Error creating group: ' + error.message);
     } finally {
       setLoading(false);
     }

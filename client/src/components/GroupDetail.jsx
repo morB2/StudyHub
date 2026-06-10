@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
 import {
   mockChatMessages, mockMaterials, mockMeetings,
-  mockNotices, mockInvitations, mockUsers, mockGroups
+  mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup } from '../services/service';
 import { cn } from '../lib/utils';
@@ -11,25 +11,19 @@ import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
   MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles,
   Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
-  Search, Move, Mic, Square, Play, Pause
+  Search, Move, Mic, Square, Play, Pause, Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import VideoCall from './VideoCall';
 import AIAssistant from './AIAssistant';
+import { joinGroupApi, fetchGroupByIdApi, leaveGroupApi } from '../services/groupService';
+import ConfirmModal from './ConfirmModal';
 
-export default function GroupDetail({ group, onBack, onNotify }) {
+export default function GroupDetail({ group, onBack, showToast }) {
   const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState('chat');
-
-  const showNotification = (title, description, type = 'error') => {
-    if (typeof onNotify === 'function') {
-      onNotify(title, description, type);
-      return;
-    }
-
-    alert(`${title}\n${description}`);
-  };
+  const [groupDetails, setGroupDetails] = useState(group);
 
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
@@ -61,8 +55,103 @@ export default function GroupDetail({ group, onBack, onNotify }) {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    icon: null,
+    type: 'indigo'
+  });
 
   const chatBottomRef = useRef(null);
+  const isMember = auth.currentUser && groupDetails?.members?.some(uid => String(uid) === String(auth.currentUser.uid));
+
+  const notify = (title, description, type = 'info') => {
+    if (typeof showToast === 'function') {
+      showToast(title, description, type);
+    } else {
+      if (type === 'error') {
+        console.error(`${title}: ${description}`);
+      } else {
+        console.log(`${title}: ${description}`);
+      }
+    }
+  };
+
+  const loadFolders = async () => {
+    if (!groupDetails?.id) {
+      setFolders([]);
+      return;
+    }
+
+    try {
+      const data = await getFoldersByGroup(groupDetails.id);
+      if (Array.isArray(data)) {
+        setFolders(data);
+      } else {
+        setFolders([]);
+      }
+    } catch (error) {
+      console.error('Failed to load folders:', error);
+      setFolders(mockFolders.filter(f => f.groupId === groupDetails.id));
+    }
+  };
+
+  const refreshAllData = async () => {
+    if (!groupDetails?.id) {
+      return;
+    }
+
+    const filteredMsgs = mockChatMessages
+      .filter(m => m.groupId === groupDetails.id)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    setMessages(filteredMsgs);
+
+    setMaterials(mockMaterials.filter(m => m.groupId === groupDetails.id));
+    await loadFolders();
+
+    const filteredMeetings = mockMeetings
+      .filter(m => m.groupId === groupDetails.id)
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    setMeetings(filteredMeetings);
+
+    setNotices(mockNotices.filter(n => n.groupId === groupDetails.id));
+
+    setGroupMembers(
+      mockUsers.filter(user => groupDetails.members?.some(id => String(id) === String(user.uid)))
+    );
+  };
+
+  const handleJoinFromDetail = async () => {
+    if (!auth.currentUser) {
+      notify(t('error') || 'Error', t('notAuthenticated') || 'Please sign in to join this group.', 'error');
+      return;
+    }
+
+    try {
+      await joinGroupApi(groupDetails.id, auth.currentUser.uid);
+      const updatedGroup = await fetchGroupByIdApi(groupDetails.id);
+      setGroupDetails(updatedGroup);
+      notify(t('joinGroup'), t('joinedGroup'), 'success');
+      await refreshAllData();
+    } catch (error) {
+      console.error('Join failed:', error);
+      notify(t('error') || 'Error', error.message || t('unknownServerError') || 'Unable to join the group.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    setGroupDetails(group);
+  }, [group]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      await refreshAllData();
+    };
+
+    loadData();
+  }, [groupDetails.id]);
 
   // טעינת וסינון כל הנתונים המדומים השייכים לקבוצה הנוכחית בטעינה ראשונית
   useEffect(() => {
@@ -71,49 +160,13 @@ export default function GroupDetail({ group, onBack, onNotify }) {
     };
 
     loadData();
-  }, [group.id]);
+  }, [groupDetails.id]);
 
   useEffect(() => {
     if (activeTab === 'chat' && chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeTab]);
-
-  const loadFolders = async () => {
-    try {
-      const serverFolders = await getFoldersByGroup(group.id);
-      setFolders(serverFolders);
-    } catch (error) {
-      console.error("Failed to load folders:", error);
-      setFolders([]);
-    }
-  };
-
-  const refreshAllData = async () => {
-    // 1. סינון הודעות צ'אט
-    const filteredMsgs = mockChatMessages
-      .filter(m => m.groupId === group.id)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    setMessages(filteredMsgs);
-
-    // 2. סינון חומרי לימוד
-    setMaterials(mockMaterials.filter(m => m.groupId === group.id));
-    await loadFolders();
-
-    // 3. סינון מפגשים
-    const filteredMeetings = mockMeetings
-      .filter(m => m.groupId === group.id)
-      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-    setMeetings(filteredMeetings);
-
-    // 4. סינון לוח מודעות
-    setNotices(mockNotices.filter(n => n.groupId === group.id));
-
-    // 5. חילוץ שמות ופרטי חברי הקבוצה מתוך ה-uids
-    const currentGroup = mockGroups.find(g => g.id === group.id) || group;
-    const membersList = mockUsers.filter(u => currentGroup.members.includes(u.uid));
-    setGroupMembers(membersList);
-  };
 
   // --- פעולות צ'אט ---
   const handleSendMessage = (e) => {
@@ -122,7 +175,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
     const msg = {
       id: 'msg_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       senderId: auth.currentUser.uid,
       senderName: auth.currentUser.displayName || 'Anonymous',
       text: newMessage.trim(),
@@ -142,7 +195,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
       // סיום הקלטה מדומה - יצירת קובץ שמע דמה
       const audioMsg = {
         id: 'msg_' + Math.random().toString(36).substr(2, 9),
-        groupId: group.id,
+        groupId: groupDetails.id,
         senderId: auth.currentUser.uid,
         senderName: auth.currentUser.displayName || 'Anonymous',
         type: 'audio',
@@ -161,31 +214,32 @@ export default function GroupDetail({ group, onBack, onNotify }) {
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!auth.currentUser) {
-      showNotification(t('error'), t('notAuthenticated'), 'error');
+      notify(t('error') || 'Error', t('notAuthenticated') || 'Please sign in to create a folder.', 'error');
       return;
     }
 
     const trimmedFolderName = newFolderName.trim();
     if (!trimmedFolderName) {
-      showNotification(t('error'), t('folderNameRequired'), 'error');
+      notify(t('error') || 'Error', t('folderNameRequired') || 'Folder name is required.', 'error');
       return;
     }
 
     try {
+      const creatorId = auth.currentUser?.id || auth.currentUser?.uid;
       const createdFolder = await createFolder({
-        groupId: group.id,
+        groupId: groupDetails.id,
         name: trimmedFolderName,
         parentId: currentFolderId,
-        creatorId: auth.currentUser.uid,
+        creatorId,
       });
 
       setFolders(prev => [...prev, createdFolder]);
       setNewFolderName('');
       setShowFolderModal(false);
-      showNotification(t('folderCreated'), t('folderCreatedSuccess'), 'success');
+      notify(t('folderCreated'), t('folderCreatedSuccess'), 'success');
     } catch (error) {
       console.error("Folder creation failed:", error);
-      showNotification(t('folderCreateFailed'), error.message || t('unknownServerError'), 'error');
+      notify(t('folderCreateFailed') || 'Folder Error', error.message || t('unknownServerError') || 'Could not create folder.', 'error');
     }
   };
 
@@ -195,7 +249,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
     const material = {
       id: 'mat_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       uploaderId: auth.currentUser.uid,
       fileName: newMaterialName.trim(),
       fileUrl: newMaterialUrl.trim(),
@@ -222,7 +276,8 @@ export default function GroupDetail({ group, onBack, onNotify }) {
     if (!window.confirm(t('deleteConfirm'))) return;
 
     if (type === 'folder') {
-      setFolders(prev => prev.filter(f => f.id !== id));
+      const idx = mockFolders.findIndex(f => f.id === id);
+      if (idx !== -1) mockFolders.splice(idx, 1);
       // העברת קבצים שהיו בתיקייה לתיקיית האב
       mockMaterials.forEach(m => {
         if (m.folderId === id) m.folderId = null;
@@ -241,7 +296,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
     const meeting = {
       id: 'meet_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       title: meetingTitle.trim(),
       startTime: new Date(`${meetingDate}T${meetingTime}`),
       location: meetingLocation.trim() || 'Online',
@@ -264,7 +319,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
     const notice = {
       id: 'not_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       authorId: auth.currentUser.uid,
       authorName: auth.currentUser.displayName || 'Anonymous',
       title: noticeTitle.trim(),
@@ -285,8 +340,8 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
     const invite = {
       id: 'inv_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
-      groupName: group.name,
+      groupId: groupDetails.id,
+      groupName: groupDetails.name,
       inviterId: auth.currentUser.uid,
       inviterName: auth.currentUser.displayName || 'Anonymous',
       inviteeEmail: inviteEmail.trim().toLowerCase(),
@@ -297,21 +352,21 @@ export default function GroupDetail({ group, onBack, onNotify }) {
     mockInvitations.push(invite);
     setInviteEmail('');
     setShowInviteModal(false);
-    alert(t('inviteSent'));
+    notify(t('inviteSent'), "", "success");
     refreshAllData();
   };
 
-  const handleLeaveGroup = () => {
+  const handleLeaveGroup = async () => {
     if (!auth.currentUser) return;
     if (!window.confirm(t('confirmLeaveGroup'))) return;
 
-    const currentGroup = mockGroups.find(g => g.id === group.id);
+    const currentGroup = mockGroups.find(g => g.id === groupDetails.id);
     if (currentGroup) {
       currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
 
       // אם הקבוצה נשארה ריקה, נמחק אותה
       if (currentGroup.members.length === 0) {
-        const idx = mockGroups.findIndex(g => g.id === group.id);
+        const idx = mockGroups.findIndex(g => g.id === groupDetails.id);
         if (idx !== -1) mockGroups.splice(idx, 1);
       }
     }
@@ -322,6 +377,58 @@ export default function GroupDetail({ group, onBack, onNotify }) {
   const currentFolders = folders.filter(f => f.parentId === currentFolderId);
   const currentMaterials = materials.filter(m => m.folderId === currentFolderId);
   const currentFolder = folders.find(f => f.id === currentFolderId);
+
+  if (!isMember) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center animate-fade-in">
+        <div className="bg-white border border-gray-100 rounded-3xl p-8 md:p-12 shadow-xl relative overflow-hidden">
+          {/* Decorative background gradients */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl"></div>
+
+          <button
+            onClick={onBack}
+            className="absolute top-6 left-6 p-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl transition-all cursor-pointer border border-gray-100"
+          >
+            <ArrowLeft size={18} className={isRTL ? "rotate-180" : ""} />
+          </button>
+
+          <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-indigo-100 shadow-inner">
+            <Lock size={36} className="text-indigo-600 animate-bounce" />
+          </div>
+
+          <h2 className="text-2xl font-black text-gray-900 mb-3 tracking-tight text-center">
+            {groupDetails.name}
+          </h2>
+          <div className="text-center mb-6">
+            <span className="text-indigo-600 font-bold text-sm bg-indigo-50/50 px-3 py-1.5 rounded-full inline-block">
+              {groupDetails.subject}
+            </span>
+          </div>
+
+          <p className="text-gray-500 text-sm max-w-md mx-auto mb-8 leading-relaxed text-center">
+            {t('notAMemberDesc')}
+          </p>
+
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <button
+              onClick={handleJoinFromDetail}
+              className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-2xl hover:from-indigo-700 hover:to-violet-700 transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm cursor-pointer"
+            >
+              <UserPlus size={18} />
+              <span>{t('joinGroup')}</span>
+            </button>
+            <button
+              onClick={onBack}
+              className="px-8 py-3.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-2xl hover:bg-gray-50 transition-all text-sm cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
@@ -337,14 +444,14 @@ export default function GroupDetail({ group, onBack, onNotify }) {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-black text-gray-900">{group.name}</h1>
-              {group.isPrivate && (
+              <h1 className="text-2xl font-black text-gray-900">{groupDetails.name}</h1>
+              {groupDetails.isPrivate && (
                 <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full uppercase">
                   Private
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-400 mt-1">{group.subject} • {groupMembers.length} {t('members')}</p>
+            <p className="text-sm text-gray-400 mt-1">{groupDetails.subject} • {groupMembers.length} {t('members')}</p>
           </div>
         </div>
 
@@ -363,7 +470,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
             <span>AI Study Assistant</span>
           </button>
 
-          {group.isPrivate && (
+          {groupDetails.isPrivate && (
             <button
               onClick={() => setShowInviteModal(true)}
               className="px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-100 flex items-center gap-2 transition-all cursor-pointer"
@@ -702,7 +809,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
 
           {/* --- תוכן טאב 5: שיחת וידאו חיה --- */}
           {activeTab === 'video' && (
-            <VideoCall groupId={group.id} onLeave={() => setActiveTab('chat')} />
+            <VideoCall groupId={groupDetails.id} onLeave={() => setActiveTab('chat')} />
           )}
 
           {/* --- תוכן טאב 6: רשימת חברי הקבוצה וניהול עזיבה --- */}
@@ -726,7 +833,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
                         <img src={member.photoURL} alt="" className="w-8 h-8 rounded-full border border-gray-200" />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 text-xs font-bold flex items-center justify-center uppercase">
-                          {member.displayName[0]}
+                          {member.displayName ? member.displayName[0] : '?'}
                         </div>
                       )}
                       <div>
@@ -734,7 +841,7 @@ export default function GroupDetail({ group, onBack, onNotify }) {
                         <p className="text-[10px] text-gray-400">{member.email}</p>
                       </div>
                     </div>
-                    {member.uid === group.creatorId && (
+                    {(String(member.uid) === String(groupDetails.creatorId) || Number(member.uid) === Number(groupDetails.creatorId)) && (
                       <span className="text-[9px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
                     )}
                   </div>
@@ -797,6 +904,16 @@ export default function GroupDetail({ group, onBack, onNotify }) {
         </div>
       )}
 
+      {/* Reusable Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        type={confirmModal.type}
+      />
     </div>
   );
 }
