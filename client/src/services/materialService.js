@@ -24,3 +24,15 @@ export const uploadMaterialApi = async (formData) => {
 
   return handleResponse(response);
 };
+
+export const getMaterialsByGroup = async (groupId) => {
+  const response = await fetch(`${API_BASE_URL}/materials?groupId=${encodeURIComponent(groupId)}`);
+  return handleResponse(response);
+};
+
+export const deleteMaterialApi = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/materials/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  return handleResponse(response);
+};

@@ -1,4 +1,8 @@
-import { uploadMaterialToSupabase } from "../services/materialService.js";
+import {
+  uploadMaterialToSupabase,
+  getMaterialsByGroup,
+  deleteMaterialFromSupabase,
+} from "../services/materialService.js";
 
 export const uploadMaterial = async (req, res) => {
   try {
@@ -25,5 +29,35 @@ export const uploadMaterial = async (req, res) => {
   } catch (error) {
     console.error("Material upload error:", error);
     res.status(error.status || 500).json({ error: error.message || "Upload failed" });
+  }
+};
+
+export const fetchMaterialsByGroup = async (req, res) => {
+  try {
+    const { groupId } = req.query;
+    if (!groupId) {
+      return res.status(400).json({ error: "groupId query parameter is required" });
+    }
+
+    const materials = await getMaterialsByGroup(groupId);
+    res.status(200).json(materials);
+  } catch (error) {
+    console.error("Fetch materials error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Failed to fetch materials" });
+  }
+};
+
+export const deleteMaterialById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Material id is required" });
+    }
+
+    const deletedMaterial = await deleteMaterialFromSupabase(id);
+    res.status(200).json({ message: "Material deleted", id: deletedMaterial.id });
+  } catch (error) {
+    console.error("Delete material error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Failed to delete material" });
   }
 };

@@ -62,3 +62,57 @@ export const uploadMaterialToSupabase = async ({
 
     return material;
 };
+
+export const getMaterialsByGroup = async (groupId) => {
+    const { data, error } = await supabase
+        .from("materials")
+        .select(`*
+            `)
+        .eq("groupId", groupId)
+        .order("createdAt", { ascending: false });
+
+    if (error) {
+        throw error;
+    }
+
+    return data || [];
+};
+
+export const deleteMaterialFromSupabase = async (id) => {
+    const { data: material, error: fetchError } = await supabase
+        .from("materials")
+        .select("id, storagePath")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (fetchError) {
+        throw fetchError;
+    }
+
+    if (!material) {
+        const err = new Error("Material not found");
+        err.status = 404;
+        throw err;
+    }
+
+    if (material.storagePath) {
+        const { error: removeError } = await supabase.storage
+            .from("materials")
+            .remove([material.storagePath]);
+
+        if (removeError) {
+            throw removeError;
+        }
+    }
+
+    const { error: deleteError } = await supabase
+        .from("materials")
+        .delete()
+        .eq("id", id);
+
+    if (deleteError) {
+        throw deleteError;
+    }
+
+    return material;
+};

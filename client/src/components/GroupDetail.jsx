@@ -6,7 +6,7 @@ import {
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup } from '../services/folderService';
-import { uploadMaterialApi } from '../services/materialService';
+import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -66,7 +66,9 @@ export default function GroupDetail({ group, onBack, showToast }) {
     message: '',
     onConfirm: () => { },
     icon: null,
-    type: 'indigo'
+    type: 'indigo',
+    targetId: null,
+    targetPath: ''
   });
 
   const chatBottomRef = useRef(null);
@@ -113,7 +115,14 @@ export default function GroupDetail({ group, onBack, showToast }) {
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     setMessages(filteredMsgs);
 
-    setMaterials(mockMaterials.filter(m => m.groupId === groupDetails.id));
+    try {
+      const serverMaterials = await getMaterialsByGroup(groupDetails.id);
+      setMaterials(Array.isArray(serverMaterials) ? serverMaterials : []);
+    } catch (error) {
+      console.error('Failed to fetch materials from server:', error);
+      setMaterials(mockMaterials.filter(m => m.groupId === groupDetails.id));
+    }
+
     await loadFolders();
 
     const filteredMeetings = mockMeetings
@@ -381,9 +390,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
-  const handleDeleteMaterial = (id, type) => {
-    if (!window.confirm(t('deleteConfirm'))) return;
-
+  const deleteMaterial = (id, type) => {
     if (type === 'folder') {
       const idx = mockFolders.findIndex(f => f.id === id);
       if (idx !== -1) mockFolders.splice(idx, 1);
@@ -396,6 +403,51 @@ export default function GroupDetail({ group, onBack, showToast }) {
       if (idx !== -1) mockMaterials.splice(idx, 1);
     }
     refreshAllData();
+  };
+
+  const deleteMaterialFromServer = async (material) => {
+    try {
+      await deleteMaterialApi(material.id);
+      setMaterials(prev => prev.filter(m => m.id !== material.id));
+
+      const mockIndex = mockMaterials.findIndex(m => m.id === material.id);
+      if (mockIndex !== -1) mockMaterials.splice(mockIndex, 1);
+
+      notify(t('fileDeleted') || 'File deleted', '', 'success');
+    } catch (error) {
+      console.error('Delete failed:', error);
+      notify(
+        t('error') || 'Error',
+        error.message || t('deleteFailed') || 'Failed to delete file',
+        'error'
+      );
+    }
+  };
+
+  const promptDeleteMaterial = (material) => {
+    const filePath = material.storagePath || material.fileUrl || '';
+    const fileMetadata = {
+      file_id: material.id,
+      file_path: filePath
+    };
+
+    setConfirmModal({
+      isOpen: true,
+      title: t('deleteConfirm') || 'Delete file',
+      message: `${t('deleteConfirm')} "${material.fileName || material.id}"`,
+      icon: Trash2,
+      type: 'danger',
+      targetId: material.id,
+      targetPath: filePath,
+      onConfirm: async () => {
+        console.log('Deleting file', fileMetadata);
+        await deleteMaterialFromServer(material);
+      }
+    });
+  };
+
+  const handleDeleteMaterial = (id, type) => {
+    deleteMaterial(id, type);
   };
 
   // --- פעולות מפגשים ---
@@ -773,7 +825,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                         <a href={m.fileUrl} target="_blank" rel="noreferrer" className="p-1.5 text-gray-300 hover:text-indigo-600 transition-colors">
                           <Download size={16} />
                         </a>
-                        <button onClick={() => handleDeleteMaterial(m.id, 'file')} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors cursor-pointer">
+                        <button onClick={() => promptDeleteMaterial(m)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors cursor-pointer">
                           <Trash2 size={16} />
                         </button>
                       </div>
