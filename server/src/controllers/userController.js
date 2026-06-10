@@ -14,6 +14,8 @@ export const addUser = async (req, res) => {
     }
     //
 
+    const newUser = await createUser({ name, email, password });
+
     res.status(201).json({
       message: "User created successfully",
       data: newUser,
