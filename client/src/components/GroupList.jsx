@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import ConfirmModal from './ConfirmModal';
 import GroupFilters from './GroupFilters';
+import GroupFollowToggle from './GroupFollowToggle';
 
 export default function GroupList({ onSelectGroup, showToast }) {
   const { t, isRTL } = useLanguage();
@@ -247,6 +248,11 @@ export default function GroupList({ onSelectGroup, showToast }) {
                     <span>{group.members.length} members</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <GroupFollowToggle 
+                      groupId={group.id}
+                      userId={auth.currentUser?.uid}
+                      showToast={showToast}
+                    />
                     <button
                       onClick={(e) => handleJoinLeave(e, group)}
                       className={cn(

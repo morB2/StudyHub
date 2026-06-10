@@ -6,6 +6,9 @@ import {
   joinGroupAction,
   leaveGroupAction,
   fetchUserGroups,
+  followGroupAction,
+  unfollowGroupAction,
+  fetchFollowedGroups,
 } from "../controllers/groupController.js";
 
 const router = express.Router();
@@ -27,5 +30,14 @@ router.post("/:id/join", joinGroupAction);
 
 // Route to leave a group
 router.post("/:id/leave", leaveGroupAction);
+
+// Route to follow a group
+router.post("/:id/follow", followGroupAction);
+
+// Route to unfollow a group
+router.post("/:id/unfollow", unfollowGroupAction);
+
+// Route to get followed groups
+router.get("/followed/:userId", fetchFollowedGroups);
 
 export default router;
