@@ -170,6 +170,7 @@ export const joinGroup = async (groupId, userId) => {
  * @returns {Promise<Object>} The deleted membership record details.
  */
 export const leaveGroup = async (groupId, userId) => {
+  // 1. Delete the user from group_members
   const { data, error } = await supabase
     .from("group_members")
     .delete()
@@ -179,6 +180,29 @@ export const leaveGroup = async (groupId, userId) => {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // 2. Fetch the group to check if it is private
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
+    .select("is_private")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (!groupError && group && group.is_private) {
+    // 3. Count remaining members in the group
+    const { count, error: countError } = await supabase
+      .from("group_members")
+      .select("user_id", { count: "exact", head: true })
+      .eq("group_id", groupId);
+
+    if (!countError && count === 0) {
+      // 4. Delete the group if no members are left
+      await supabase
+        .from("groups")
+        .delete()
+        .eq("id", groupId);
+    }
   }
 
   return data;
