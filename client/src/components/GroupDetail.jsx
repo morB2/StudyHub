@@ -5,7 +5,7 @@ import {
   mockChatMessages, mockMaterials, mockMeetings,
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
-import { createFolder, getFoldersByGroup } from '../services/service';
+import { createFolder, getFoldersByGroup } from '../services/folderService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -397,10 +397,10 @@ export default function GroupDetail({ group, onBack, showToast }) {
           }
 
           notify(t('leaveGroup'), t('leftGroup') || "Left group successfully", 'success');
-          
+
           // Close confirm modal
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          
+
           // Navigate back
           onBack();
         } catch (error) {
