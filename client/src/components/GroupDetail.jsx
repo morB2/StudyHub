@@ -10,7 +10,7 @@ import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
   MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles,
-  Video, UserPlus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
+  Video, UserPlus, UserMinus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
   Search, Move, Mic, Square, Play, Pause, Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -118,9 +118,25 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
     setNotices(mockNotices.filter(n => n.groupId === groupDetails.id));
 
-    setGroupMembers(
-      mockUsers.filter(user => groupDetails.members?.some(id => String(id) === String(user.uid)))
-    );
+    if (groupDetails.memberDetails && groupDetails.memberDetails.length > 0) {
+      setGroupMembers(groupDetails.memberDetails);
+    } else {
+      try {
+        const freshGroup = await fetchGroupByIdApi(groupDetails.id);
+        if (freshGroup.memberDetails && freshGroup.memberDetails.length > 0) {
+          setGroupMembers(freshGroup.memberDetails);
+        } else {
+          setGroupMembers(
+            mockUsers.filter(user => freshGroup.members?.some(id => String(id) === String(user.uid)))
+          );
+        }
+      } catch (err) {
+        console.error("Error fetching group members from server:", err);
+        setGroupMembers(
+          mockUsers.filter(user => groupDetails.members?.some(id => String(id) === String(user.uid)))
+        );
+      }
+    }
   };
 
   const handleJoinFromDetail = async () => {
@@ -358,19 +374,42 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
   const handleLeaveGroup = async () => {
     if (!auth.currentUser) return;
-    if (!window.confirm(t('confirmLeaveGroup'))) return;
 
-    const currentGroup = mockGroups.find(g => g.id === groupDetails.id);
-    if (currentGroup) {
-      currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
+    setConfirmModal({
+      isOpen: true,
+      title: t('leaveGroup') || "Leave Group",
+      message: t('confirmLeaveGroup') || "Are you sure you want to leave this group?",
+      icon: UserMinus,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          const userId = auth.currentUser.uid;
+          await leaveGroupApi(groupDetails.id, userId);
 
-      // אם הקבוצה נשארה ריקה, נמחק אותה
-      if (currentGroup.members.length === 0) {
-        const idx = mockGroups.findIndex(g => g.id === groupDetails.id);
-        if (idx !== -1) mockGroups.splice(idx, 1);
+          // Update global mockGroups state for backward compatibility if needed
+          const currentGroup = mockGroups.find(g => g.id === groupDetails.id);
+          if (currentGroup) {
+            currentGroup.members = currentGroup.members.filter(uid => String(uid) !== String(userId));
+            if (currentGroup.members.length === 0) {
+              const idx = mockGroups.findIndex(g => g.id === groupDetails.id);
+              if (idx !== -1) mockGroups.splice(idx, 1);
+            }
+          }
+
+          notify(t('leaveGroup'), t('leftGroup') || "Left group successfully", 'success');
+          
+          // Close confirm modal
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          
+          // Navigate back
+          onBack();
+        } catch (error) {
+          console.error("Error leaving group:", error);
+          notify(t('error') || "Error", error.message, 'error');
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    }
-    onBack();
+    });
   };
 
   // חישוב תיקיות וקבצים ברמה הנוכחית
