@@ -6,11 +6,35 @@ let authListener = null;
 
 const getStoredUser = () => {
   const stored = localStorage.getItem("studybuddy_user");
-  return stored ? JSON.parse(stored) : null;
+  if (!stored) return null;
+  const user = JSON.parse(stored);
+  if (user) {
+    if (user.id && !user.uid) {
+      user.uid = user.id;
+    } else if (user.uid && !user.id) {
+      user.id = user.uid;
+    }
+  }
+  return user;
 };
 
+let currentUserInstance = getStoredUser();
+
 export const auth = {
-  currentUser: getStoredUser(),
+  get currentUser() {
+    return currentUserInstance;
+  },
+  set currentUser(user) {
+    if (user) {
+      if (user.id && !user.uid) {
+        user.uid = user.id;
+      } else if (user.uid && !user.id) {
+        user.id = user.uid;
+      }
+    }
+    currentUserInstance = user;
+    if (authListener) authListener(user);
+  }
 };
 
 export const onAuthStateChanged = (authObj, callback) => {
