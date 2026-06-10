@@ -85,7 +85,7 @@ export const updateUserProfile = async ({ id, name, bio, institution, photoURL, 
   const { data, error } = await supabase
     .from('users')
     .update({ 
-      
+      name: name || null,
       bio: bio || null, 
       institution: institution || null, 
       "photoURL": finalPhotoUrl || null 

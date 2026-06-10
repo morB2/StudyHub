@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { auth, onAuthStateChanged } from './firebase';
 import { mockGroups } from './mock/mockData';
 import { useLanguage } from './contexts/LanguageContext';
-
 // ייבוא קומפוננטות המסכים והרכיבים
 import LandingPage from './components/LandingPage';
 import Auth from './components/Auth';
@@ -14,6 +13,7 @@ import GroupDetail from './components/GroupDetail';
 import InvitationsList from './components/InvitationsList';
 import NotificationManager from './components/NotificationManager';
 import Settings from './components/Settings';
+import ProfileModal from './components/ProfileModal';
 
 import { Plus, GraduationCap, Settings as SettingsIcon, ShieldAlert, CheckCircle2, AlertTriangle, Info as InfoIcon } from 'lucide-react';
 
@@ -26,7 +26,7 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
-
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const handleGroupCreated = () => {
     setGroupsRefreshKey(prev => prev + 1);
   };
@@ -123,7 +123,7 @@ export default function App() {
 
       {showSettingsModal && <Settings onClose={() => setShowSettingsModal(false)} />}
       {showCreateModal && <CreateGroup onClose={() => setShowCreateModal(false)} onGroupCreated={handleGroupCreated} />}
-
+      {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />} 
       {/* מערכת התראות צפות */}
       <div className={`fixed bottom-6 z-50 flex flex-col gap-3 max-w-sm w-full p-4 ${isRTL ? 'left-6' : 'right-6'}`}>
         {toasts.map(toast => {
