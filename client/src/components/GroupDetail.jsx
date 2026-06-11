@@ -1,16 +1,18 @@
 // client/src/components/GroupDetail.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
-import { 
-  mockChatMessages, mockMaterials, mockMeetings, 
-  mockNotices, mockFolders, mockInvitations, mockUsers
+import {
+  mockChatMessages, mockMaterials, mockMeetings,
+  mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
+import { createFolder, getFoldersByGroup } from '../services/folderService';
+import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
-import { 
-  MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X, 
-  MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles, 
-  Video, UserPlus, UserMinus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight, 
-  Search, Move, Mic, Square, Play, Pause, Lock
+import {
+  MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
+  MapPin, Clock, ArrowLeft, Users, Bell, BellOff, Info, Upload, Sparkles,
+  Video, UserPlus, UserMinus, Mail, FolderPlus, Folder as FolderIcon, ChevronRight,
+  Search, Move, Mic, Square, Play, Pause, Lock, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -24,23 +26,6 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [activeTab, setActiveTab] = useState('chat');
   const [groupDetails, setGroupDetails] = useState(group);
 
-  // Reusable confirmation modal state
-  const [confirmModal, setConfirmModal] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-    icon: null,
-    type: 'indigo'
-  });
-
-  const triggerConfirm = (params) => {
-    setConfirmModal({
-      isOpen: true,
-      ...params
-    });
-  };
-  
   // State-ים מקומיים המסונכרנים עם ה-Mock Data הגלובלי
   const [messages, setMessages] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -59,6 +44,10 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [newMessage, setNewMessage] = useState('');
   const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialUrl, setNewMaterialUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
+  const fileInputRef = useRef(null);
   const [meetingTitle, setMeetingTitle] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
   const [meetingTime, setMeetingTime] = useState('');
@@ -71,50 +60,143 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    icon: null,
+    type: 'indigo',
+    targetId: null,
+    targetPath: ''
+  });
 
   const chatBottomRef = useRef(null);
+  const isMember = auth.currentUser && groupDetails?.members?.some(uid => String(uid) === String(auth.currentUser.uid));
+
+  const notify = (title, description, type = 'info') => {
+    if (typeof showToast === 'function') {
+      showToast(title, description, type);
+    } else {
+      if (type === 'error') {
+        console.error(`${title}: ${description}`);
+      } else {
+        console.log(`${title}: ${description}`);
+      }
+    }
+  };
+
+  const loadFolders = async () => {
+    if (!groupDetails?.id) {
+      setFolders([]);
+      return;
+    }
+
+    try {
+      const data = await getFoldersByGroup(groupDetails.id);
+      if (Array.isArray(data)) {
+        setFolders(data);
+      } else {
+        setFolders([]);
+      }
+    } catch (error) {
+      console.error('Failed to load folders:', error);
+      setFolders(mockFolders.filter(f => f.groupId === groupDetails.id));
+    }
+  };
+
+  const refreshAllData = async () => {
+    if (!groupDetails?.id) {
+      return;
+    }
+
+    const filteredMsgs = mockChatMessages
+      .filter(m => m.groupId === groupDetails.id)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    setMessages(filteredMsgs);
+
+    try {
+      const serverMaterials = await getMaterialsByGroup(groupDetails.id);
+      setMaterials(Array.isArray(serverMaterials) ? serverMaterials : []);
+    } catch (error) {
+      console.error('Failed to fetch materials from server:', error);
+      setMaterials(mockMaterials.filter(m => m.groupId === groupDetails.id));
+    }
+
+    await loadFolders();
+
+    const filteredMeetings = mockMeetings
+      .filter(m => m.groupId === groupDetails.id)
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    setMeetings(filteredMeetings);
+
+    setNotices(mockNotices.filter(n => n.groupId === groupDetails.id));
+
+    if (groupDetails.memberDetails && groupDetails.memberDetails.length > 0) {
+      setGroupMembers(groupDetails.memberDetails);
+    } else {
+      try {
+        const freshGroup = await fetchGroupByIdApi(groupDetails.id);
+        if (freshGroup.memberDetails && freshGroup.memberDetails.length > 0) {
+          setGroupMembers(freshGroup.memberDetails);
+        } else {
+          setGroupMembers(
+            mockUsers.filter(user => freshGroup.members?.some(id => String(id) === String(user.uid)))
+          );
+        }
+      } catch (err) {
+        console.error("Error fetching group members from server:", err);
+        setGroupMembers(
+          mockUsers.filter(user => groupDetails.members?.some(id => String(id) === String(user.uid)))
+        );
+      }
+    }
+  };
+
+  const handleJoinFromDetail = async () => {
+    if (!auth.currentUser) {
+      notify(t('error') || 'Error', t('notAuthenticated') || 'Please sign in to join this group.', 'error');
+      return;
+    }
+
+    try {
+      await joinGroupApi(groupDetails.id, auth.currentUser.uid);
+      const updatedGroup = await fetchGroupByIdApi(groupDetails.id);
+      setGroupDetails(updatedGroup);
+      notify(t('joinGroup'), t('joinedGroup'), 'success');
+      await refreshAllData();
+    } catch (error) {
+      console.error('Join failed:', error);
+      notify(t('error') || 'Error', error.message || t('unknownServerError') || 'Unable to join the group.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    setGroupDetails(group);
+  }, [group]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      await refreshAllData();
+    };
+
+    loadData();
+  }, [groupDetails.id]);
 
   // טעינת וסינון כל הנתונים המדומים השייכים לקבוצה הנוכחית בטעינה ראשונית
   useEffect(() => {
-    refreshAllData();
-  }, [group.id]);
+    const loadData = async () => {
+      await refreshAllData();
+    };
+
+    loadData();
+  }, [groupDetails.id]);
 
   useEffect(() => {
     if (activeTab === 'chat' && chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeTab]);
-
-  const refreshAllData = async () => {
-    try {
-      const freshGroup = await fetchGroupByIdApi(group.id);
-      if (freshGroup) {
-        setGroupDetails(freshGroup);
-        setGroupMembers(freshGroup.memberDetails || []);
-      }
-    } catch (error) {
-      console.error("Error refreshing group details from API:", error);
-    }
-
-    // 1. סינון הודעות צ'אט
-    const filteredMsgs = mockChatMessages
-      .filter(m => m.groupId === group.id)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    setMessages(filteredMsgs);
-
-    // 2. סינון חומרי לימוד ותיקיות
-    setMaterials(mockMaterials.filter(m => m.groupId === group.id));
-    setFolders(mockFolders.filter(f => f.groupId === group.id));
-
-    // 3. סינון מפגשים
-    const filteredMeetings = mockMeetings
-      .filter(m => m.groupId === group.id)
-      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-    setMeetings(filteredMeetings);
-
-    // 4. סינון לוח מודעות
-    setNotices(mockNotices.filter(n => n.groupId === group.id));
-  };
 
   // --- פעולות צ'אט ---
   const handleSendMessage = (e) => {
@@ -123,7 +205,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
     const msg = {
       id: 'msg_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       senderId: auth.currentUser.uid,
       senderName: auth.currentUser.displayName || 'Anonymous',
       text: newMessage.trim(),
@@ -143,7 +225,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
       // סיום הקלטה מדומה - יצירת קובץ שמע דמה
       const audioMsg = {
         id: 'msg_' + Math.random().toString(36).substr(2, 9),
-        groupId: group.id,
+        groupId: groupDetails.id,
         senderId: auth.currentUser.uid,
         senderName: auth.currentUser.displayName || 'Anonymous',
         type: 'audio',
@@ -159,43 +241,144 @@ export default function GroupDetail({ group, onBack, showToast }) {
   };
 
   // --- פעולות חומרי לימוד ותיקיות ---
-  const handleCreateFolder = (e) => {
+  const handleCreateFolder = async (e) => {
     e.preventDefault();
-    if (!newFolderName.trim() || !auth.currentUser) return;
+    if (!auth.currentUser) {
+      notify(t('error') || 'Error', t('notAuthenticated') || 'Please sign in to create a folder.', 'error');
+      return;
+    }
 
-    const folder = {
-      id: 'folder_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
-      name: newFolderName.trim(),
-      parentId: currentFolderId,
-      creatorId: auth.currentUser.uid,
-      createdAt: new Date()
-    };
+    const trimmedFolderName = newFolderName.trim();
+    if (!trimmedFolderName) {
+      notify(t('error') || 'Error', t('folderNameRequired') || 'Folder name is required.', 'error');
+      return;
+    }
 
-    mockFolders.push(folder);
-    setNewFolderName('');
-    setShowFolderModal(false);
-    refreshAllData();
+    try {
+      const creatorId = auth.currentUser?.id || auth.currentUser?.uid;
+      const createdFolder = await createFolder({
+        groupId: groupDetails.id,
+        name: trimmedFolderName,
+        parentId: currentFolderId,
+        creatorId,
+      });
+
+      setFolders(prev => [...prev, createdFolder]);
+      setNewFolderName('');
+      setShowFolderModal(false);
+      notify(t('folderCreated'), t('folderCreatedSuccess'), 'success');
+    } catch (error) {
+      console.error("Folder creation failed:", error);
+      notify(t('folderCreateFailed') || 'Folder Error', error.message || t('unknownServerError') || 'Could not create folder.', 'error');
+    }
   };
 
-  const handleUploadMaterial = (e) => {
-    e.preventDefault();
-    if (!newMaterialName.trim() || !newMaterialUrl.trim() || !auth.currentUser) return;
-
-    const material = {
-      id: 'mat_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
-      uploaderId: auth.currentUser.uid,
-      fileName: newMaterialName.trim(),
-      fileUrl: newMaterialUrl.trim(),
-      folderId: currentFolderId,
-      createdAt: new Date()
-    };
-
-    mockMaterials.push(material);
-    setNewMaterialName('');
+  const handleFileSelection = (file) => {
+    if (!file) return;
+    setSelectedFile(file);
+    setNewMaterialName(file.name);
     setNewMaterialUrl('');
-    refreshAllData();
+  };
+
+  const handleInputFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelection(file);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileSelection(file);
+    }
+  };
+
+  const openFilePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setNewMaterialUrl('');
+  };
+
+  const handleUploadMaterial = async (e) => {
+    e.preventDefault();
+    if (!newMaterialName.trim() || !auth.currentUser) return;
+    if (!selectedFile && !newMaterialUrl.trim()) return;
+
+    setUploadingMaterial(true);
+    try {
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('file_name', newMaterialName.trim());
+        formData.append('group_id', groupDetails.id);
+        if (currentFolderId) {
+          formData.append('folder_id', currentFolderId);
+        }
+        formData.append('uploader_id', auth.currentUser.uid);
+
+        const response = await uploadMaterialApi(formData);
+        const uploadedMaterial = response.material || response.data || response;
+        const fallbackFileUrl = URL.createObjectURL(selectedFile);
+
+        if (uploadedMaterial) {
+          const newMaterial = {
+            id: uploadedMaterial.id || 'mat_' + Math.random().toString(36).substr(2, 9),
+            groupId: groupDetails.id,
+            uploaderId: auth.currentUser.uid,
+            fileName: uploadedMaterial.fileName || newMaterialName.trim(),
+            fileUrl: uploadedMaterial.fileUrl || fallbackFileUrl,
+            folderId: uploadedMaterial.folderId ?? currentFolderId,
+            createdAt: uploadedMaterial.createdAt ? new Date(uploadedMaterial.createdAt) : new Date(),
+            storagePath: uploadedMaterial.storagePath,
+          };
+
+          mockMaterials.push(newMaterial);
+          setMaterials(prev => [...prev, newMaterial]);
+        }
+      } else {
+        const material = {
+          id: 'mat_' + Math.random().toString(36).substr(2, 9),
+          groupId: groupDetails.id,
+          uploaderId: auth.currentUser.uid,
+          fileName: newMaterialName.trim(),
+          fileUrl: newMaterialUrl.trim(),
+          folderId: currentFolderId,
+          createdAt: new Date(),
+          localUpload: false,
+        };
+
+        mockMaterials.push(material);
+        setMaterials(prev => [...prev, material]);
+      }
+
+      setNewMaterialName('');
+      setNewMaterialUrl('');
+      setSelectedFile(null);
+      refreshAllData();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      notify(t('error') || 'Error', error.message || 'Upload failed', 'error');
+    } finally {
+      setUploadingMaterial(false);
+    }
   };
 
   const handleMoveMaterial = (materialId, folderId) => {
@@ -207,27 +390,64 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
-  const handleDeleteMaterial = (id, type) => {
-    triggerConfirm({
-      title: t('deleteConfirm') || "Delete Item",
-      message: t('deleteConfirm') || "Are you sure you want to delete this?",
+  const deleteMaterial = (id, type) => {
+    if (type === 'folder') {
+      const idx = mockFolders.findIndex(f => f.id === id);
+      if (idx !== -1) mockFolders.splice(idx, 1);
+      // העברת קבצים שהיו בתיקייה לתיקיית האב
+      mockMaterials.forEach(m => {
+        if (m.folderId === id) m.folderId = null;
+      });
+    } else {
+      const idx = mockMaterials.findIndex(m => m.id === id);
+      if (idx !== -1) mockMaterials.splice(idx, 1);
+    }
+    refreshAllData();
+  };
+
+  const deleteMaterialFromServer = async (material) => {
+    try {
+      await deleteMaterialApi(material.id);
+      setMaterials(prev => prev.filter(m => m.id !== material.id));
+
+      const mockIndex = mockMaterials.findIndex(m => m.id === material.id);
+      if (mockIndex !== -1) mockMaterials.splice(mockIndex, 1);
+
+      notify(t('fileDeleted') || 'File deleted', '', 'success');
+    } catch (error) {
+      console.error('Delete failed:', error);
+      notify(
+        t('error') || 'Error',
+        error.message || t('deleteFailed') || 'Failed to delete file',
+        'error'
+      );
+    }
+  };
+
+  const promptDeleteMaterial = (material) => {
+    const filePath = material.storagePath || material.fileUrl || '';
+    const fileMetadata = {
+      file_id: material.id,
+      file_path: filePath
+    };
+
+    setConfirmModal({
+      isOpen: true,
+      title: t('deleteConfirm') || 'Delete file',
+      message: `${t('deleteConfirm')} "${material.fileName || material.id}"`,
       icon: Trash2,
       type: 'danger',
-      onConfirm: () => {
-        if (type === 'folder') {
-          const idx = mockFolders.findIndex(f => f.id === id);
-          if (idx !== -1) mockFolders.splice(idx, 1);
-          // העברת קבצים שהיו בתיקייה לתיקיית האב
-          mockMaterials.forEach(m => {
-            if (m.folderId === id) m.folderId = null;
-          });
-        } else {
-          const idx = mockMaterials.findIndex(m => m.id === id);
-          if (idx !== -1) mockMaterials.splice(idx, 1);
-        }
-        refreshAllData();
+      targetId: material.id,
+      targetPath: filePath,
+      onConfirm: async () => {
+        console.log('Deleting file', fileMetadata);
+        await deleteMaterialFromServer(material);
       }
     });
+  };
+
+  const handleDeleteMaterial = (id, type) => {
+    deleteMaterial(id, type);
   };
 
   // --- פעולות מפגשים ---
@@ -237,7 +457,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
     const meeting = {
       id: 'meet_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       title: meetingTitle.trim(),
       startTime: new Date(`${meetingDate}T${meetingTime}`),
       location: meetingLocation.trim() || 'Online',
@@ -260,7 +480,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
     const notice = {
       id: 'not_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
+      groupId: groupDetails.id,
       authorId: auth.currentUser.uid,
       authorName: auth.currentUser.displayName || 'Anonymous',
       title: noticeTitle.trim(),
@@ -281,8 +501,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
     const invite = {
       id: 'inv_' + Math.random().toString(36).substr(2, 9),
-      groupId: group.id,
-      groupName: group.name,
+      groupId: groupDetails.id,
+      groupName: groupDetails.name,
       inviterId: auth.currentUser.uid,
       inviterName: auth.currentUser.displayName || 'Anonymous',
       inviteeEmail: inviteEmail.trim().toLowerCase(),
@@ -293,51 +513,48 @@ export default function GroupDetail({ group, onBack, showToast }) {
     mockInvitations.push(invite);
     setInviteEmail('');
     setShowInviteModal(false);
-    showToast(t('inviteSent'), "", "success");
+    notify(t('inviteSent'), "", "success");
     refreshAllData();
   };
 
   const handleLeaveGroup = async () => {
     if (!auth.currentUser) return;
 
-    triggerConfirm({
+    setConfirmModal({
+      isOpen: true,
       title: t('leaveGroup') || "Leave Group",
       message: t('confirmLeaveGroup') || "Are you sure you want to leave this group?",
       icon: UserMinus,
       type: 'danger',
       onConfirm: async () => {
         try {
-          await leaveGroupApi(group.id, auth.currentUser.uid);
-          showToast(t('leaveGroup') || "Leave Group", t('leftGroup') || "Successfully left the group!", "success");
+          const userId = auth.currentUser.uid;
+          await leaveGroupApi(groupDetails.id, userId);
+
+          // Update global mockGroups state for backward compatibility if needed
+          const currentGroup = mockGroups.find(g => g.id === groupDetails.id);
+          if (currentGroup) {
+            currentGroup.members = currentGroup.members.filter(uid => String(uid) !== String(userId));
+            if (currentGroup.members.length === 0) {
+              const idx = mockGroups.findIndex(g => g.id === groupDetails.id);
+              if (idx !== -1) mockGroups.splice(idx, 1);
+            }
+          }
+
+          notify(t('leaveGroup'), t('leftGroup') || "Left group successfully", 'success');
+
+          // Close confirm modal
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+
+          // Navigate back
           onBack();
         } catch (error) {
           console.error("Error leaving group:", error);
-          showToast(t('error') || "Error", error.message, "error");
+          notify(t('error') || "Error", error.message, 'error');
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
         }
       }
     });
-  };
-
-  const isMember = auth.currentUser && (
-    groupDetails.members.includes(auth.currentUser.uid) ||
-    groupDetails.members.includes(Number(auth.currentUser.uid)) ||
-    groupDetails.members.includes(String(auth.currentUser.uid))
-  );
-
-  const handleJoinFromDetail = async () => {
-    if (!auth.currentUser) {
-      showToast("Authentication Required", "Please sign in to join groups", "error");
-      return;
-    }
-    const userId = auth.currentUser.uid;
-    try {
-      await joinGroupApi(group.id, userId);
-      showToast(t('joinGroup') || "Join Group", t('joinedGroup') || "Successfully joined the group!", "success");
-      await refreshAllData();
-    } catch (error) {
-      console.error("Error joining group from details:", error);
-      showToast(t('error') || "Error", error.message, "error");
-    }
   };
 
   // חישוב תיקיות וקבצים ברמה הנוכחית
@@ -352,8 +569,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
           {/* Decorative background gradients */}
           <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl"></div>
           <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl"></div>
-          
-          <button 
+
+          <button
             onClick={onBack}
             className="absolute top-6 left-6 p-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl transition-all cursor-pointer border border-gray-100"
           >
@@ -399,11 +616,11 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-      
+
       {/* כפתור חזרה וכותרת ראשית */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onBack}
             className="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 text-gray-600 shadow-sm transition-all cursor-pointer"
           >
@@ -428,8 +645,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
             onClick={() => setShowAiAssistant(!showAiAssistant)}
             className={cn(
               "px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer border",
-              showAiAssistant 
-                ? "bg-amber-500 border-amber-500 text-white shadow-amber-100" 
+              showAiAssistant
+                ? "bg-amber-500 border-amber-500 text-white shadow-amber-100"
                 : "bg-white border-gray-100 text-amber-600 hover:bg-amber-50"
             )}
           >
@@ -452,7 +669,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
       {/* גריד מרכזי המפצל בין התוכן לבין עוזר ה-AI במידה ונפתח */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <div className={cn("lg:col-span-3 space-y-6", showAiAssistant && "lg:col-span-2")}>
-          
+
           {/* סרגל ניווט פנימי (Tabs Navbar) */}
           <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex gap-1 overflow-x-auto">
             {[
@@ -470,8 +687,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap cursor-pointer",
-                    activeTab === tab.id 
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" 
+                    activeTab === tab.id
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100"
                       : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                   )}
                 >
@@ -514,8 +731,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
                   onClick={toggleRecording}
                   className={cn(
                     "p-3 rounded-xl transition-all cursor-pointer border",
-                    isRecording 
-                      ? "bg-red-500 border-red-500 text-white animate-pulse" 
+                    isRecording
+                      ? "bg-red-500 border-red-500 text-white animate-pulse"
                       : "bg-gray-50 border-gray-100 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                   )}
                 >
@@ -565,11 +782,11 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
               {/* גריד תיקיות וקבצים נוכחיים */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* צד א: רשימת הפריטים (תיקיות וקבצים) */}
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
                   <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2">Items inside</h3>
-                  
+
                   {currentFolders.length === 0 && currentMaterials.length === 0 && (
                     <p className="text-sm text-gray-400 italic text-center py-8">Folder is empty</p>
                   )}
@@ -598,7 +815,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button 
+                        <button
                           onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
                           className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
                           title={t('moveToFolder')}
@@ -608,7 +825,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                         <a href={m.fileUrl} target="_blank" rel="noreferrer" className="p-1.5 text-gray-300 hover:text-indigo-600 transition-colors">
                           <Download size={16} />
                         </a>
-                        <button onClick={() => handleDeleteMaterial(m.id, 'file')} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors cursor-pointer">
+                        <button onClick={() => promptDeleteMaterial(m)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors cursor-pointer">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -634,24 +851,83 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     {t('uploadMaterial')}
                   </h3>
                   <form onSubmit={handleUploadMaterial} className="space-y-4">
+                    <div
+                      className={cn(
+                        "rounded-3xl border border-dashed p-5 text-center transition-all cursor-pointer",
+                        dragActive
+                          ? "border-indigo-400 bg-indigo-50"
+                          : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-white"
+                      )}
+                      onClick={openFilePicker}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={handleInputFileChange}
+                      />
+                      <p className="text-sm font-semibold text-gray-700">{selectedFile ? selectedFile.name : 'Drag & drop a file here'}</p>
+                      <p className="text-xs text-gray-400 mt-1">or click to browse from your computer</p>
+                    </div>
+
+                    {selectedFile ? (
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-left text-sm text-gray-700 space-y-2">
+                        <p className="font-bold text-gray-900">Selected file</p>
+                        <p className="text-gray-600 truncate">{selectedFile.name}</p>
+                        <button
+                          type="button"
+                          onClick={clearSelectedFile}
+                          className="text-indigo-600 text-xs font-bold hover:underline"
+                        >
+                          Remove file
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileUrl')}</label>
+                        <input
+                          type="url"
+                          placeholder="https://drive.google.com/..."
+                          className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                          value={newMaterialUrl}
+                          onChange={(e) => setNewMaterialUrl(e.target.value)}
+                        />
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileName')}</label>
-                      <input 
-                        type="text" required placeholder="e.g. Summary Lesson 4"
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Summary Lesson 4"
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                        value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)}
+                        value={newMaterialName}
+                        onChange={(e) => setNewMaterialName(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('fileUrl')}</label>
-                      <input 
-                        type="url" required placeholder="https://drive.google.com/..."
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                        value={newMaterialUrl} onChange={(e) => setNewMaterialUrl(e.target.value)}
-                      />
-                    </div>
-                    <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer">
-                      {t('share')}
+
+                    <button
+                      type="submit"
+                      disabled={uploadingMaterial}
+                      className={cn(
+                        "w-full py-3 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer",
+                        uploadingMaterial
+                          ? "bg-indigo-400 cursor-not-allowed"
+                          : "bg-indigo-600 hover:bg-indigo-700"
+                      )}
+                    >
+                      {uploadingMaterial ? (
+                        <span className="inline-flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading...
+                        </span>
+                      ) : (
+                        t('share')
+                      )}
                     </button>
                   </form>
                 </div>
@@ -685,7 +961,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                 <form onSubmit={handleScheduleMeeting} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingTitle')}</label>
-                    <input 
+                    <input
                       type="text" required placeholder="e.g. Exam Prep Session"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)}
@@ -694,7 +970,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingDate')}</label>
-                      <input 
+                      <input
                         type="date" required
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)}
@@ -702,7 +978,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase">{t('meetingTime')}</label>
-                      <input 
+                      <input
                         type="time" required
                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)}
@@ -711,7 +987,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">{t('location')}</label>
-                    <input 
+                    <input
                       type="text" placeholder="Zoom, Library, etc. (Default: Online)"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={meetingLocation} onChange={(e) => setMeetingLocation(e.target.value)}
@@ -752,7 +1028,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                 <form onSubmit={handlePostNotice} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Title</label>
-                    <input 
+                    <input
                       type="text" required placeholder="e.g. Change in Meeting Location"
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)}
@@ -760,7 +1036,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Content</label>
-                    <textarea 
+                    <textarea
                       required rows={4} placeholder="Write down your updates for the group..."
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
                       value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)}
@@ -834,7 +1110,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
             <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"><X size={18} /></button>
             <h3 className="font-black text-gray-900 text-base mb-4">{t('createFolder')}</h3>
             <form onSubmit={handleCreateFolder} className="space-y-4">
-              <input 
+              <input
                 type="text" required placeholder={t('folderName')}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
@@ -857,7 +1133,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
             <form onSubmit={handleSendInvite} className="space-y-4">
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
+                <input
                   type="email" required placeholder={t('emailPlaceholder')}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
@@ -872,7 +1148,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
       )}
 
       {/* Reusable Confirmation Modal */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
@@ -911,18 +1187,18 @@ function AudioMessagePlayer({ src, isMe }) {
 
   return (
     <div className={cn("flex items-center gap-3 py-1", isMe ? "text-white" : "text-gray-900")}>
-      <button 
+      <button
         type="button"
         onClick={togglePlay}
         className={cn("p-2 rounded-full transition-all cursor-pointer", isMe ? "bg-white/20 hover:bg-white/30" : "bg-indigo-100 text-indigo-600 hover:bg-indigo-200")}
       >
         {isPlaying ? <Pause size={14} /> : <Play size={14} />}
       </button>
-      
+
       <div className="flex flex-col gap-1 min-w-[120px]">
-        <audio 
-          ref={audioRef} 
-          src={src} 
+        <audio
+          ref={audioRef}
+          src={src}
           onEnded={() => setIsPlaying(false)}
           className="hidden"
         />
@@ -931,7 +1207,7 @@ function AudioMessagePlayer({ src, isMe }) {
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-[9px] font-bold opacity-60 uppercase tracking-wider">Audio Memo</span>
-          <select 
+          <select
             value={playbackRate}
             onChange={(e) => handleRateChange(Number(e.target.value))}
             className={cn(
