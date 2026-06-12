@@ -5,7 +5,7 @@ import {
   mockChatMessages, mockMaterials, mockMeetings,
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
-import { createFolder, getFoldersByGroup } from '../services/folderService';
+import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
 import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
 import {
@@ -424,6 +424,42 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
+  const deleteFolderFromServer = async (folder) => {
+    try {
+      const response = await deleteFolder(folder.id);
+      const deletedFolderIds = response.deletedFolderIds || [folder.id];
+      const deletedMaterialIds = response.deletedMaterialIds || [];
+
+      // Update local states
+      setFolders(prev => prev.filter(f => !deletedFolderIds.includes(f.id)));
+      setMaterials(prev => prev.filter(m => !deletedMaterialIds.includes(m.id)));
+
+      // Update mock data for backward compatibility / offline fallback
+      deletedFolderIds.forEach(id => {
+        const mockIdx = mockFolders.findIndex(f => f.id === id);
+        if (mockIdx !== -1) mockFolders.splice(mockIdx, 1);
+      });
+      deletedMaterialIds.forEach(id => {
+        const mockIdx = mockMaterials.findIndex(m => m.id === id);
+        if (mockIdx !== -1) mockMaterials.splice(mockIdx, 1);
+      });
+
+      // If we are currently inside one of the deleted folders, reset view to root
+      if (deletedFolderIds.includes(currentFolderId)) {
+        setCurrentFolderId(null);
+      }
+
+      notify(t('folderDeleted') || 'Folder deleted successfully', '', 'success');
+    } catch (error) {
+      console.error('Delete folder failed:', error);
+      notify(
+        t('error') || 'Error',
+        error.message || t('folderDeleteFailed') || 'Could not delete folder.',
+        'error'
+      );
+    }
+  };
+
   const promptDeleteMaterial = (material) => {
     const filePath = material.storagePath || material.fileUrl || '';
     const fileMetadata = {
@@ -446,8 +482,35 @@ export default function GroupDetail({ group, onBack, showToast }) {
     });
   };
 
+  const promptDeleteFolder = (folder) => {
+    setConfirmModal({
+      isOpen: true,
+      title: t('deleteFolder') || 'Delete folder',
+      message: `${t('deleteFolderWarning') || 'Are you sure you want to delete this folder? Deleting it will also delete all files and sub-folders associated with it.'} "${folder.name}"`,
+      icon: Trash2,
+      type: 'danger',
+      targetId: folder.id,
+      onConfirm: async () => {
+        await deleteFolderFromServer(folder);
+      }
+    });
+  };
+
   const handleDeleteMaterial = (id, type) => {
-    deleteMaterial(id, type);
+    if (type === 'folder') {
+      const folder = folders.find(f => f.id === id);
+      if (folder) {
+        promptDeleteFolder(folder);
+      }
+    } else {
+      const material = materials.find(m => m.id === id);
+      if (material) {
+        promptDeleteMaterial(material);
+      } else {
+        // Fallback for mock/local deletion if not found in loaded state
+        deleteMaterial(id, type);
+      }
+    }
   };
 
   // --- פעולות מפגשים ---
