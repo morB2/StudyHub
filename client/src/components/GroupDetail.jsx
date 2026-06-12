@@ -6,7 +6,7 @@ import {
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
-import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi } from '../services/materialService';
+import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -381,12 +381,29 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
-  const handleMoveMaterial = (materialId, folderId) => {
-    const mat = mockMaterials.find(m => m.id === materialId);
-    if (mat) {
-      mat.folderId = folderId;
+  const handleMoveMaterial = async (materialId, folderId) => {
+    try {
+      await moveMaterialApi(materialId, folderId);
+      
+      // Update local state
+      setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, folderId } : m));
+      
+      // Update mock data for backward compatibility / offline fallback
+      const mockIdx = mockMaterials.findIndex(m => m.id === materialId);
+      if (mockIdx !== -1) {
+        mockMaterials[mockIdx].folderId = folderId;
+      }
+      
+      notify(t('fileMovedSuccess') || 'File moved successfully', '', 'success');
+    } catch (error) {
+      console.error('Failed to move material:', error);
+      notify(
+        t('fileMoveFailed') || 'Failed to move file',
+        error.message || t('unknownServerError') || 'Could not move file.',
+        'error'
+      );
+    } finally {
       setMovingMaterial(null);
-      refreshAllData();
     }
   };
 
@@ -621,6 +638,16 @@ export default function GroupDetail({ group, onBack, showToast }) {
   };
 
   // חישוב תיקיות וקבצים ברמה הנוכחית
+  const getBreadcrumbs = () => {
+    const crumbs = [];
+    let current = folders.find(f => f.id === currentFolderId);
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
+    }
+    return crumbs;
+  };
+
   const currentFolders = folders.filter(f => f.parentId === currentFolderId);
   const currentMaterials = materials.filter(m => m.folderId === currentFolderId);
   const currentFolder = folders.find(f => f.id === currentFolderId);
@@ -824,16 +851,42 @@ export default function GroupDetail({ group, onBack, showToast }) {
           {activeTab === 'materials' && (
             <div className="space-y-6">
               {/* סרגל ניווט עליון בתיקיות (Breadcrumbs) */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-2 text-sm font-bold text-gray-600">
-                <button onClick={() => setCurrentFolderId(null)} className="hover:text-indigo-600 cursor-pointer">
-                  {t('materials')}
-                </button>
-                {currentFolder && (
-                  <>
-                    <ChevronRight size={14} />
-                    <span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">{currentFolder.name}</span>
-                  </>
+              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-2 text-sm font-bold text-gray-600">
+                {currentFolderId === null ? (
+                  <span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+                    {t('materials')}
+                  </span>
+                ) : (
+                  <button 
+                    onClick={() => setCurrentFolderId(null)} 
+                    className="hover:text-indigo-600 cursor-pointer transition-colors"
+                  >
+                    {t('materials')}
+                  </button>
                 )}
+                
+                {getBreadcrumbs().map((crumb, idx, arr) => {
+                  const isLast = idx === arr.length - 1;
+                  return (
+                    <React.Fragment key={crumb.id}>
+                      <ChevronRight size={14} className={isRTL ? "rotate-180" : ""} />
+                      {isLast ? (
+                        <span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg truncate max-w-[120px] sm:max-w-[200px]" title={crumb.name}>
+                          {crumb.name}
+                        </span>
+                      ) : (
+                        <button 
+                          onClick={() => setCurrentFolderId(crumb.id)} 
+                          className="hover:text-indigo-600 cursor-pointer transition-colors truncate max-w-[120px] sm:max-w-[200px] text-left"
+                          title={crumb.name}
+                        >
+                          {crumb.name}
+                        </button>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                
                 <button
                   onClick={() => setShowFolderModal(true)}
                   className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 border border-dashed border-indigo-200 text-indigo-600 rounded-lg bg-indigo-50/30 hover:bg-indigo-50 transition-all cursor-pointer"
@@ -878,13 +931,63 @@ export default function GroupDetail({ group, onBack, showToast }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
-                          className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
-                          title={t('moveToFolder')}
-                        >
-                          <Move size={16} />
-                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
+                            className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
+                            title={t('moveToFolder')}
+                          >
+                            <Move size={16} />
+                          </button>
+
+                          {movingMaterial === m.id && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-20 cursor-default" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMovingMaterial(null);
+                                }}
+                              />
+                              <div className={cn(
+                                "absolute bg-white border border-gray-100 shadow-2xl rounded-2xl p-3.5 z-30 space-y-2.5 mt-2 w-52 text-left animate-in fade-in slide-in-from-top-1 duration-150",
+                                isRTL ? "left-0" : "right-0"
+                              )}>
+                                <p className="text-[10px] font-black uppercase text-gray-400 mb-1 border-b border-gray-50 pb-1.5">{t('moveToFolder') || "Move to:"}</p>
+                                
+                                {m.folderId !== null && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveMaterial(m.id, null)}
+                                    className="flex items-center gap-2 w-full text-left text-xs font-bold text-gray-700 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all cursor-pointer"
+                                  >
+                                    <span className="text-sm">🏠</span>
+                                    <span>{t('backToRoot') || "Root /"}</span>
+                                  </button>
+                                )}
+                                
+                                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                  {folders
+                                    .filter(f => f.id !== m.folderId)
+                                    .map(f => (
+                                      <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => handleMoveMaterial(m.id, f.id)}
+                                        className="flex items-center gap-2 w-full text-left text-xs font-semibold text-gray-600 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all truncate cursor-pointer"
+                                      >
+                                        <span className="text-sm">📁</span>
+                                        <span className="truncate">{f.name}</span>
+                                      </button>
+                                    ))}
+                                  {folders.filter(f => f.id !== m.folderId).length === 0 && m.folderId === null && (
+                                    <p className="text-[10px] text-gray-400 italic text-center py-2">No other folders</p>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
                         <a href={m.fileUrl} target="_blank" rel="noreferrer" className="p-1.5 text-gray-300 hover:text-indigo-600 transition-colors">
                           <Download size={16} />
                         </a>
@@ -892,17 +995,6 @@ export default function GroupDetail({ group, onBack, showToast }) {
                           <Trash2 size={16} />
                         </button>
                       </div>
-
-                      {/* תפריט מודאלי פנימי קטן להעברת קובץ לתיקייה אחרת */}
-                      {movingMaterial === m.id && (
-                        <div className="absolute bg-white border border-gray-100 shadow-xl rounded-xl p-3 z-20 space-y-2 mt-12 right-12 text-left">
-                          <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Move to:</p>
-                          <button onClick={() => handleMoveMaterial(m.id, null)} className="block w-full text-left text-xs font-bold text-gray-600 hover:text-indigo-600 py-1">/ Root</button>
-                          {folders.filter(f => f.id !== currentFolderId).map(f => (
-                            <button key={f.id} onClick={() => handleMoveMaterial(m.id, f.id)} className="block w-full text-left text-xs font-medium text-gray-600 hover:text-indigo-600 py-1">📁 {f.name}</button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

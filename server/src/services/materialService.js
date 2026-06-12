@@ -116,3 +116,19 @@ export const deleteMaterialFromSupabase = async (id) => {
 
     return material;
 };
+
+export const updateMaterialFolderInSupabase = async (id, folderId) => {
+    const { data, error } = await supabase
+        .from("materials")
+        .update({ folderId: folderId || null })
+        .eq("id", id)
+        .select()
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+};
+

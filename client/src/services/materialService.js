@@ -36,3 +36,15 @@ export const deleteMaterialApi = async (id) => {
   });
   return handleResponse(response);
 };
+
+export const moveMaterialApi = async (id, folderId) => {
+  const response = await fetch(`${API_BASE_URL}/materials/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ folderId }),
+  });
+  return handleResponse(response);
+};
+
