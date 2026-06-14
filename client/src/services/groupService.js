@@ -98,3 +98,62 @@ export const fetchGroupByIdApi = async (groupId) => {
   return response.json();
 };
 
+/**
+ * Sends a request to follow a specific study group.
+ * @param {string} groupId
+ * @param {string} userId
+ * @returns {Promise<Object>} API JSON response.
+ */
+export const followGroupApi = async (groupId, userId) => {
+  const response = await fetch(`${API_BASE}/${groupId}/follow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to follow group");
+  }
+
+  return response.json();
+};
+
+/**
+ * Sends a request to unfollow a specific study group.
+ * @param {string} groupId
+ * @param {string} userId
+ * @returns {Promise<Object>} API JSON response.
+ */
+export const unfollowGroupApi = async (groupId, userId) => {
+  const response = await fetch(`${API_BASE}/${groupId}/unfollow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to unfollow group");
+  }
+
+  return response.json();
+};
+
+/**
+ * Fetches all group IDs that a user is currently following.
+ * @param {string} userId
+ * @returns {Promise<Array<string>>} List of followed group IDs.
+ */
+export const fetchFollowedGroupsApi = async (userId) => {
+  const response = await fetch(`${API_BASE}/followed/${userId}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch followed groups");
+  }
+  return response.json();
+};
+

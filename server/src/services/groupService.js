@@ -170,6 +170,7 @@ export const joinGroup = async (groupId, userId) => {
  * @returns {Promise<Object>} The deleted membership record details.
  */
 export const leaveGroup = async (groupId, userId) => {
+  // 1. Delete the user from group_members
   const { data, error } = await supabase
     .from("group_members")
     .delete()
@@ -179,6 +180,29 @@ export const leaveGroup = async (groupId, userId) => {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // 2. Fetch the group to check if it is private
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
+    .select("is_private")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (!groupError && group && group.is_private) {
+    // 3. Count remaining members in the group
+    const { count, error: countError } = await supabase
+      .from("group_members")
+      .select("user_id", { count: "exact", head: true })
+      .eq("group_id", groupId);
+
+    if (!countError && count === 0) {
+      // 4. Delete the group if no members are left
+      await supabase
+        .from("groups")
+        .delete()
+        .eq("id", groupId);
+    }
   }
 
   return data;
@@ -230,4 +254,67 @@ export const getUserGroups = async (userId) => {
     createdAt: group.created_at,
     members: group.group_members ? group.group_members.map((m) => m.user_id) : [],
   }));
+};
+
+/**
+ * Subscribes a user to a group (follow).
+ * @param {string} groupId
+ * @param {string} userId
+ * @returns {Promise<Object>} The subscription record.
+ */
+export const followGroup = async (groupId, userId) => {
+  const { data, error } = await supabase
+    .from("followed_groups")
+    .insert([
+      {
+        group_id: groupId,
+        user_id: userId,
+      },
+    ])
+    .select();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+};
+
+/**
+ * Unsubscribes a user from a group (unfollow).
+ * @param {string} groupId
+ * @param {string} userId
+ * @returns {Promise<Object>} The deleted subscription record.
+ */
+export const unfollowGroup = async (groupId, userId) => {
+  const { data, error } = await supabase
+    .from("followed_groups")
+    .delete()
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .select();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+};
+
+/**
+ * Retrieves all group IDs that a user is currently following.
+ * @param {string} userId
+ * @returns {Promise<Array<string>>} List of group IDs.
+ */
+export const getFollowedGroups = async (userId) => {
+  const { data, error } = await supabase
+    .from("followed_groups")
+    .select("group_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ? data.map((item) => item.group_id) : [];
 };

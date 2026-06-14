@@ -20,6 +20,7 @@ import VideoCall from './VideoCall';
 import AIAssistant from './AIAssistant';
 import { joinGroupApi, fetchGroupByIdApi, leaveGroupApi } from '../services/groupService';
 import ConfirmModal from './ConfirmModal';
+import GroupFollowToggle from './GroupFollowToggle';
 
 export default function GroupDetail({ group, onBack, showToast }) {
   const { t, isRTL } = useLanguage();
@@ -790,6 +791,12 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
         {/* כפתורי עזר עליוניים */}
         <div className="flex items-center gap-2">
+          <GroupFollowToggle 
+            groupId={groupDetails.id}
+            userId={auth.currentUser?.uid}
+            showToast={showToast}
+          />
+
           <button
             onClick={() => setShowAiAssistant(!showAiAssistant)}
             className={cn(
