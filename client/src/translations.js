@@ -121,7 +121,13 @@ export const translations = {
     newMeetingScheduled: "New Meeting Scheduled",
     notAMember: "Not a member",
     notAMemberDesc: "Only registered members of this study group can view its chat, schedule, and study materials. Join the group to start collaborating!",
-    confirmJoinPrompt: "To enter the group and view its materials, you must be registered. Would you like to join and enter?"
+    confirmJoinPrompt: "To enter the group and view its materials, you must be registered. Would you like to join and enter?",
+    itemsInside: "Items inside",
+    clearSearch: "Clear search",
+    searchingFiles: "Searching files...",
+    noFilesFoundInGroup: "We didn't find any files with this name in this group",
+    tryAnotherSearch: "Try another search or reset the field to return to the regular view.",
+    folderEmpty: "Folder is empty"
   },
   he: {
     appName: "StudyHub",
@@ -243,6 +249,12 @@ export const translations = {
     newMeetingScheduled: "נקבע מפגש קבוצתי חדש",
     notAMember: "אינך חבר בקבוצה",
     notAMemberDesc: "רק חברים הרשומים לקבוצת לימוד זו יכולים לצפות בצ'אט, בלוח המפגשים ובחומרי הלימוד. הצטרפו לקבוצה כדי להתחיל לשתף פעולה!",
-    confirmJoinPrompt: "על מנת להיכנס לקבוצה ולראות את החומרים עליך להיות רשום אליה. האם להצטרף כעת ולהיכנס?"
+    confirmJoinPrompt: "על מנת להיכנס לקבוצה ולראות את החומרים עליך להיות רשום אליה. האם להצטרף כעת ולהיכנס?",
+    itemsInside: "פריטים בקבוצה",
+    clearSearch: "נקה חיפוש",
+    searchingFiles: "מחפש קבצים...",
+    noFilesFoundInGroup: "לא מצאנו קבצים בשם הזה בקבוצה הזו",
+    tryAnotherSearch: "נסה חיפוש אחר או אפס את השדה כדי לחזור לתצוגה הרגילה.",
+    folderEmpty: "התיקייה ריקה"
   }
 };

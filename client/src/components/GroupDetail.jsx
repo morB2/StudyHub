@@ -6,7 +6,7 @@ import {
   mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
-import { getMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
+import { getMaterialsByGroup, searchMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -39,6 +39,10 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [movingMaterial, setMovingMaterial] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const searchDebounceRef = useRef(null);
 
   // טפסים וקלטים חדשים
   const [newMessage, setNewMessage] = useState('');
@@ -171,8 +175,61 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
+  const executeSearch = async (query) => {
+    if (!groupDetails?.id || !query.trim()) {
+      setSearchResults([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    setIsSearchLoading(true);
+    try {
+      const results = await searchMaterialsByGroup(groupDetails.id, query.trim());
+      setSearchResults(Array.isArray(results) ? results : []);
+    } catch (error) {
+      console.error('Search failed, falling back to local search:', error);
+      const localResults = materials.filter(m =>
+        m.fileName && m.fileName.toLowerCase().includes(query.trim().toLowerCase())
+      );
+      setSearchResults(localResults);
+    } finally {
+      setIsSearchLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      executeSearch(searchQuery);
+    }, 400);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchQuery, groupDetails.id]);
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearchLoading(false);
+  };
+
   useEffect(() => {
     setGroupDetails(group);
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearchLoading(false);
   }, [group]);
 
   useEffect(() => {
@@ -384,16 +441,16 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const handleMoveMaterial = async (materialId, folderId) => {
     try {
       await moveMaterialApi(materialId, folderId);
-      
+
       // Update local state
       setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, folderId } : m));
-      
+
       // Update mock data for backward compatibility / offline fallback
       const mockIdx = mockMaterials.findIndex(m => m.id === materialId);
       if (mockIdx !== -1) {
         mockMaterials[mockIdx].folderId = folderId;
       }
-      
+
       notify(t('fileMovedSuccess') || 'File moved successfully', '', 'success');
     } catch (error) {
       console.error('Failed to move material:', error);
@@ -651,6 +708,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const currentFolders = folders.filter(f => f.parentId === currentFolderId);
   const currentMaterials = materials.filter(m => m.folderId === currentFolderId);
   const currentFolder = folders.find(f => f.id === currentFolderId);
+  const searchActive = searchQuery.trim().length > 0;
+  const displayedMaterials = searchActive ? searchResults : currentMaterials;
 
   if (!isMember) {
     return (
@@ -857,14 +916,14 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     {t('materials')}
                   </span>
                 ) : (
-                  <button 
-                    onClick={() => setCurrentFolderId(null)} 
+                  <button
+                    onClick={() => setCurrentFolderId(null)}
                     className="hover:text-indigo-600 cursor-pointer transition-colors"
                   >
                     {t('materials')}
                   </button>
                 )}
-                
+
                 {getBreadcrumbs().map((crumb, idx, arr) => {
                   const isLast = idx === arr.length - 1;
                   return (
@@ -875,8 +934,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
                           {crumb.name}
                         </span>
                       ) : (
-                        <button 
-                          onClick={() => setCurrentFolderId(crumb.id)} 
+                        <button
+                          onClick={() => setCurrentFolderId(crumb.id)}
                           className="hover:text-indigo-600 cursor-pointer transition-colors truncate max-w-[120px] sm:max-w-[200px] text-left"
                           title={crumb.name}
                         >
@@ -886,7 +945,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     </React.Fragment>
                   );
                 })}
-                
+
                 <button
                   onClick={() => setShowFolderModal(true)}
                   className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 border border-dashed border-indigo-200 text-indigo-600 rounded-lg bg-indigo-50/30 hover:bg-indigo-50 transition-all cursor-pointer"
@@ -901,14 +960,62 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
                 {/* צד א: רשימת הפריטים (תיקיות וקבצים) */}
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2">Items inside</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2">{t('itemsInside')}</h3>
+                      {searchActive && (
+                        <button
+                          type="button"
+                          onClick={handleClearSearch}
+                          className="inline-flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 p-2 transition-all"
+                          aria-label={t('clearSearch')}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
 
-                  {currentFolders.length === 0 && currentMaterials.length === 0 && (
-                    <p className="text-sm text-gray-400 italic text-center py-8">Folder is empty</p>
+                    <div className="relative">
+                      <Search size={18} className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isRTL ? 'right-3' : 'left-3'}`} />
+                      <input
+                        type="text"
+                        placeholder={t('searchMaterials')}
+                        className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={handleClearSearch}
+                          className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${isRTL ? 'left-3' : 'right-3'}`}
+                          aria-label={t('clearSearch')}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {searchActive && isSearchLoading && (
+                    <p className="text-sm text-gray-500 italic py-6 text-center">{t('searchingFiles')}</p>
                   )}
 
-                  {/* תיקיות */}
-                  {currentFolders.map(f => (
+                  {searchActive && !isSearchLoading && displayedMaterials.length === 0 && (
+                    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-gray-500">
+                      <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
+                        <FileText size={24} className="text-indigo-500" />
+                      </div>
+                      <p className="font-semibold">{t('noFilesFoundInGroup')}</p>
+                      <p className="text-xs">{t('tryAnotherSearch')}</p>
+                    </div>
+                  )}
+
+                  {!searchActive && currentFolders.length === 0 && currentMaterials.length === 0 && (
+                    <p className="text-sm text-gray-400 italic text-center py-8">{t('folderEmpty')}</p>
+                  )}
+
+                  {!searchActive && currentFolders.map(f => (
                     <div key={f.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100/70 transition-colors">
                       <button onClick={() => setCurrentFolderId(f.id)} className="flex items-center gap-3 font-bold text-sm text-gray-700 text-left flex-1 cursor-pointer">
                         <FolderIcon size={20} className="text-amber-500 fill-amber-400" />
@@ -920,8 +1027,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     </div>
                   ))}
 
-                  {/* קבצים */}
-                  {currentMaterials.map(m => (
+                  {(searchActive ? displayedMaterials : currentMaterials).map(m => (
                     <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
                       <div className="flex items-center gap-3 text-left">
                         <FileText size={20} className="text-indigo-500" />
@@ -931,63 +1037,65 @@ export default function GroupDetail({ group, onBack, showToast }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <div className="relative">
-                          <button
-                            onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
-                            className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
-                            title={t('moveToFolder')}
-                          >
-                            <Move size={16} />
-                          </button>
+                        {!searchActive && (
+                          <div className="relative">
+                            <button
+                              onClick={() => setMovingMaterial(movingMaterial === m.id ? null : m.id)}
+                              className={cn("p-1.5 rounded-lg transition-colors cursor-pointer", movingMaterial === m.id ? "bg-indigo-50 text-indigo-600" : "text-gray-300 hover:text-indigo-600")}
+                              title={t('moveToFolder')}
+                            >
+                              <Move size={16} />
+                            </button>
 
-                          {movingMaterial === m.id && (
-                            <>
-                              <div 
-                                className="fixed inset-0 z-20 cursor-default" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMovingMaterial(null);
-                                }}
-                              />
-                              <div className={cn(
-                                "absolute bg-white border border-gray-100 shadow-2xl rounded-2xl p-3.5 z-30 space-y-2.5 mt-2 w-52 text-left animate-in fade-in slide-in-from-top-1 duration-150",
-                                isRTL ? "left-0" : "right-0"
-                              )}>
-                                <p className="text-[10px] font-black uppercase text-gray-400 mb-1 border-b border-gray-50 pb-1.5">{t('moveToFolder') || "Move to:"}</p>
-                                
-                                {m.folderId !== null && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveMaterial(m.id, null)}
-                                    className="flex items-center gap-2 w-full text-left text-xs font-bold text-gray-700 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all cursor-pointer"
-                                  >
-                                    <span className="text-sm">🏠</span>
-                                    <span>{t('backToRoot') || "Root /"}</span>
-                                  </button>
-                                )}
-                                
-                                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                                  {folders
-                                    .filter(f => f.id !== m.folderId)
-                                    .map(f => (
-                                      <button
-                                        key={f.id}
-                                        type="button"
-                                        onClick={() => handleMoveMaterial(m.id, f.id)}
-                                        className="flex items-center gap-2 w-full text-left text-xs font-semibold text-gray-600 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all truncate cursor-pointer"
-                                      >
-                                        <span className="text-sm">📁</span>
-                                        <span className="truncate">{f.name}</span>
-                                      </button>
-                                    ))}
-                                  {folders.filter(f => f.id !== m.folderId).length === 0 && m.folderId === null && (
-                                    <p className="text-[10px] text-gray-400 italic text-center py-2">No other folders</p>
+                            {movingMaterial === m.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-20 cursor-default"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMovingMaterial(null);
+                                  }}
+                                />
+                                <div className={cn(
+                                  "absolute bg-white border border-gray-100 shadow-2xl rounded-2xl p-3.5 z-30 space-y-2.5 mt-2 w-52 text-left animate-in fade-in slide-in-from-top-1 duration-150",
+                                  isRTL ? "left-0" : "right-0"
+                                )}>
+                                  <p className="text-[10px] font-black uppercase text-gray-400 mb-1 border-b border-gray-50 pb-1.5">{t('moveToFolder') || "Move to:"}</p>
+
+                                  {m.folderId !== null && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveMaterial(m.id, null)}
+                                      className="flex items-center gap-2 w-full text-left text-xs font-bold text-gray-700 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all cursor-pointer"
+                                    >
+                                      <span className="text-sm">🏠</span>
+                                      <span>{t('backToRoot') || "Root /"}</span>
+                                    </button>
                                   )}
+
+                                  <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                    {folders
+                                      .filter(f => f.id !== m.folderId)
+                                      .map(f => (
+                                        <button
+                                          key={f.id}
+                                          type="button"
+                                          onClick={() => handleMoveMaterial(m.id, f.id)}
+                                          className="flex items-center gap-2 w-full text-left text-xs font-semibold text-gray-600 hover:text-indigo-600 py-2 px-2.5 hover:bg-indigo-50/50 rounded-xl transition-all truncate cursor-pointer"
+                                        >
+                                          <span className="text-sm">📁</span>
+                                          <span className="truncate">{f.name}</span>
+                                        </button>
+                                      ))}
+                                    {folders.filter(f => f.id !== m.folderId).length === 0 && m.folderId === null && (
+                                      <p className="text-[10px] text-gray-400 italic text-center py-2">No other folders</p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                         <a href={m.fileUrl} target="_blank" rel="noreferrer" className="p-1.5 text-gray-300 hover:text-indigo-600 transition-colors">
                           <Download size={16} />
                         </a>

@@ -1,6 +1,7 @@
 import {
   uploadMaterialToSupabase,
   getMaterialsByGroup,
+  searchMaterialsByGroup,
   deleteMaterialFromSupabase,
   updateMaterialFolderInSupabase,
 } from "../services/materialService.js";
@@ -45,6 +46,27 @@ export const fetchMaterialsByGroup = async (req, res) => {
   } catch (error) {
     console.error("Fetch materials error:", error);
     res.status(error.status || 500).json({ error: error.message || "Failed to fetch materials" });
+  }
+};
+
+export const searchMaterialsInGroup = async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const { q } = req.query;
+
+    if (!groupId) {
+      return res.status(400).json({ error: "groupId path parameter is required" });
+    }
+
+    if (!q || !q.trim()) {
+      return res.status(200).json([]);
+    }
+
+    const materials = await searchMaterialsByGroup(groupId, q.trim());
+    res.status(200).json(materials);
+  } catch (error) {
+    console.error("Search materials error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Failed to search materials" });
   }
 };
 
