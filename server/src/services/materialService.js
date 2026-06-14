@@ -78,6 +78,22 @@ export const getMaterialsByGroup = async (groupId) => {
     return data || [];
 };
 
+export const searchMaterialsByGroup = async (groupId, query) => {
+    const sanitizedQuery = `%${query.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+    const { data, error } = await supabase
+        .from("materials")
+        .select(`*`)
+        .eq("groupId", groupId)
+        .ilike("fileName", sanitizedQuery)
+        .order("createdAt", { ascending: false });
+
+    if (error) {
+        throw error;
+    }
+
+    return data || [];
+};
+
 export const deleteMaterialFromSupabase = async (id) => {
     const { data: material, error: fetchError } = await supabase
         .from("materials")
@@ -116,3 +132,19 @@ export const deleteMaterialFromSupabase = async (id) => {
 
     return material;
 };
+
+export const updateMaterialFolderInSupabase = async (id, folderId) => {
+    const { data, error } = await supabase
+        .from("materials")
+        .update({ folderId: folderId || null })
+        .eq("id", id)
+        .select()
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+};
+

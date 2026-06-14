@@ -100,6 +100,12 @@ export const translations = {
     unknownServerError: "Unexpected server error. Please try again.",
     notAuthenticated: "Please sign in to create folders.",
     moveToFolder: "Move to Folder",
+    deleteFolder: "Delete Folder",
+    deleteFolderWarning: "Are you sure you want to delete this folder? Deleting it will also delete all files and sub-folders associated with it.",
+    folderDeleted: "Folder deleted successfully",
+    folderDeleteFailed: "Failed to delete folder",
+    fileMovedSuccess: "File moved successfully",
+    fileMoveFailed: "Failed to move file",
     backToRoot: "Back to Main",
     searchMaterials: "Search materials...",
     audioMessage: "Audio Message",
@@ -115,7 +121,13 @@ export const translations = {
     newMeetingScheduled: "New Meeting Scheduled",
     notAMember: "Not a member",
     notAMemberDesc: "Only registered members of this study group can view its chat, schedule, and study materials. Join the group to start collaborating!",
-    confirmJoinPrompt: "To enter the group and view its materials, you must be registered. Would you like to join and enter?"
+    confirmJoinPrompt: "To enter the group and view its materials, you must be registered. Would you like to join and enter?",
+    itemsInside: "Items inside",
+    clearSearch: "Clear search",
+    searchingFiles: "Searching files...",
+    noFilesFoundInGroup: "We didn't find any files with this name in this group",
+    tryAnotherSearch: "Try another search or reset the field to return to the regular view.",
+    folderEmpty: "Folder is empty"
   },
   he: {
     appName: "StudyHub",
@@ -216,6 +228,12 @@ export const translations = {
     unknownServerError: "שגיאת שרת. נסה שוב מאוחר יותר.",
     notAuthenticated: "התחבר כדי ליצור תיקייה.",
     moveToFolder: "העבר לתיקייה",
+    deleteFolder: "מחיקת תיקייה",
+    deleteFolderWarning: "האם אתה בטוח שברצונך למחוק תיקייה זו? מחיקת התיקייה תמחק גם את כל הקבצים ותתי-התיקיות המשויכים אליה.",
+    folderDeleted: "התיקייה נמחקה בהצלחה",
+    folderDeleteFailed: "מחיקת התיקייה נכשלה",
+    fileMovedSuccess: "הקובץ הועבר בהצלחה",
+    fileMoveFailed: "העברת הקובץ נכשלה",
     backToRoot: "חזרה לראשי",
     searchMaterials: "חפש חומרים...",
     audioMessage: "הודעה קולית",
@@ -231,6 +249,12 @@ export const translations = {
     newMeetingScheduled: "נקבע מפגש קבוצתי חדש",
     notAMember: "אינך חבר בקבוצה",
     notAMemberDesc: "רק חברים הרשומים לקבוצת לימוד זו יכולים לצפות בצ'אט, בלוח המפגשים ובחומרי הלימוד. הצטרפו לקבוצה כדי להתחיל לשתף פעולה!",
-    confirmJoinPrompt: "על מנת להיכנס לקבוצה ולראות את החומרים עליך להיות רשום אליה. האם להצטרף כעת ולהיכנס?"
+    confirmJoinPrompt: "על מנת להיכנס לקבוצה ולראות את החומרים עליך להיות רשום אליה. האם להצטרף כעת ולהיכנס?",
+    itemsInside: "פריטים בקבוצה",
+    clearSearch: "נקה חיפוש",
+    searchingFiles: "מחפש קבצים...",
+    noFilesFoundInGroup: "לא מצאנו קבצים בשם הזה בקבוצה הזו",
+    tryAnotherSearch: "נסה חיפוש אחר או אפס את השדה כדי לחזור לתצוגה הרגילה.",
+    folderEmpty: "התיקייה ריקה"
   }
 };
