@@ -7,7 +7,7 @@ import {
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
 import { getMaterialsByGroup, searchMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
-import { getMeetingsByGroupApi, scheduleMeetingApi, normalizeMeeting } from '../services/meetingService';
+import { getMeetingsByGroupApi, scheduleMeetingApi, normalizeMeeting, deleteMeetingApi } from '../services/meetingService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -676,6 +676,35 @@ export default function GroupDetail({ group, onBack, showToast }) {
     }
   };
 
+  const promptDeleteMeeting = (meeting) => {
+    setConfirmModal({
+      isOpen: true,
+      title: t('deleteMeeting') || 'Cancel Meeting',
+      message: `${t('deleteMeetingConfirm') || 'Are you sure you want to cancel the meeting?'} "${meeting.title}"`,
+      icon: Trash2,
+      type: 'danger',
+      targetId: meeting.id,
+      onConfirm: async () => {
+        try {
+          if (!auth.currentUser) {
+            notify(t('error') || 'Error', t('notAuthenticated') || 'Please sign in first.', 'error');
+            return;
+          }
+          await deleteMeetingApi(meeting.id, auth.currentUser.uid);
+          setMeetings(prev => prev.filter(m => m.id !== meeting.id));
+          notify(t('scheduleMeeting') || 'Meeting', t('deleteMeetingSuccess') || 'Meeting cancelled successfully!', 'success');
+        } catch (error) {
+          console.error("Failed to delete meeting:", error);
+          const errorMsg = error.status === 403
+            ? (t('deleteMeetingError') || "You do not have permission to delete this meeting.")
+            : (error.message || t('unknownServerError') || "Failed to delete meeting");
+          notify(t('error') || 'Error', errorMsg, 'error');
+        }
+      }
+    });
+  };
+
+
   // --- פעולות לוח מודעות ---
   const handlePostNotice = (e) => {
     e.preventDefault();
@@ -856,7 +885,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
         {/* כפתורי עזר עליוניים */}
         <div className="flex items-center gap-2">
-          <GroupFollowToggle 
+          <GroupFollowToggle
             groupId={groupDetails.id}
             userId={auth.currentUser?.uid}
             showToast={showToast}
@@ -1303,7 +1332,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     // Detect online video call platform links or general HTTP links
                     const isLink = meet.location && (/^https?:\/\//i.test(meet.location) || /^(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live.com)/i.test(meet.location));
                     const href = isLink ? (/^https?:\/\//i.test(meet.location) ? meet.location : `https://${meet.location}`) : '';
-                    
+
                     let displayLoc = meet.location === 'Online' ? t('online') : meet.location;
                     let linkLabel = displayLoc;
                     if (isLink) {
@@ -1317,7 +1346,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     }
 
                     return (
-                      <div key={meet.id} className="flex gap-4 p-4 bg-gray-50/50 hover:bg-gray-50 rounded-2xl border border-gray-100/60 shadow-sm transition-all text-left items-center group">
+                      <div key={meet.id} className={cn("flex gap-4 p-4 bg-gray-50/50 hover:bg-gray-50 rounded-2xl border border-gray-100/60 shadow-sm transition-all items-center group", isRTL ? "text-right" : "text-left")}>
                         {/* Styled Date Box (Month on top, Day on bottom) */}
                         <div className="flex flex-col items-center justify-center w-14 h-16 bg-purple-50 rounded-xl overflow-hidden border border-purple-100 flex-shrink-0">
                           <div className="w-full bg-purple-600 text-[9px] font-bold text-white py-0.5 text-center tracking-wider uppercase">
@@ -1333,17 +1362,17 @@ export default function GroupDetail({ group, onBack, showToast }) {
                           <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-purple-600 transition-colors">
                             {meet.title}
                           </h4>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-400 font-medium">
+                          <div className={cn("flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-400 font-medium", isRTL && "flex-row-reverse justify-end")}>
                             <div className="flex items-center gap-1">
                               <Clock size={12} className="text-gray-400" />
                               <span>{formattedTime}</span>
                             </div>
                             <div className="flex items-center gap-1 min-w-0 font-medium">
                               {isLink ? (
-                                <a 
-                                  href={href} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-800 hover:underline font-bold transition-all"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -1359,6 +1388,35 @@ export default function GroupDetail({ group, onBack, showToast }) {
                             </div>
                           </div>
                         </div>
+
+                        {/* Delete Trash Icon */}
+                        {(() => {
+                          const isAuthorizedToDelete = auth.currentUser && (
+                            String(meet.creatorId) === String(auth.currentUser.uid) ||
+                            String(groupDetails.creatorId) === String(auth.currentUser.uid)
+                          );
+                          return (
+                            <button
+                              type="button"
+                              disabled={!isAuthorizedToDelete}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAuthorizedToDelete) {
+                                  promptDeleteMeeting(meet);
+                                }
+                              }}
+                              className={cn(
+                                "p-2 rounded-xl transition-all flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100",
+                                isAuthorizedToDelete
+                                  ? "text-gray-400 hover:text-rose-600 hover:bg-rose-50/50 cursor-pointer"
+                                  : "text-gray-300 cursor-not-allowed opacity-40 group-hover:opacity-40"
+                              )}
+                              title={isAuthorizedToDelete ? (t('deleteMeeting') || 'Cancel Meeting') : undefined}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -1561,14 +1619,14 @@ export default function GroupDetail({ group, onBack, showToast }) {
       {showMeetingModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-3xl max-w-md w-full border border-gray-100 shadow-2xl relative animate-fade-in">
-            <button 
+            <button
               onClick={() => {
                 setShowMeetingModal(false);
                 setMeetingError("");
                 setMeetingTitle("");
                 setMeetingDateTime("");
                 setMeetingLocation("");
-              }} 
+              }}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
             >
               <X size={18} />
@@ -1578,7 +1636,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
               <span>{t('scheduleNewMeeting')}</span>
             </h3>
             <p className="text-xs text-gray-400 mb-4">{t('meetingDesc')}</p>
-            
+
             {meetingError && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 font-semibold text-left">
                 {meetingError}
@@ -1589,11 +1647,11 @@ export default function GroupDetail({ group, onBack, showToast }) {
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('meetingTitle')}</label>
                 <input
-                  type="text" 
-                  required 
+                  type="text"
+                  required
                   placeholder={t('meetingTitlePlaceholder')}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                  value={meetingTitle} 
+                  value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
                 />
               </div>
@@ -1601,10 +1659,10 @@ export default function GroupDetail({ group, onBack, showToast }) {
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('meetingDateTime')}</label>
                 <input
-                  type="datetime-local" 
+                  type="datetime-local"
                   required
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-sm font-sans"
-                  value={meetingDateTime} 
+                  value={meetingDateTime}
                   onChange={(e) => setMeetingDateTime(e.target.value)}
                 />
               </div>
@@ -1612,16 +1670,16 @@ export default function GroupDetail({ group, onBack, showToast }) {
               <div className="space-y-1 text-left">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('locationOrLinkOptional')}</label>
                 <input
-                  type="text" 
+                  type="text"
                   placeholder={t('meetingLocationPlaceholder')}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                  value={meetingLocation} 
+                  value={meetingLocation}
                   onChange={(e) => setMeetingLocation(e.target.value)}
                 />
               </div>
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all shadow-md shadow-purple-100 text-sm cursor-pointer"
               >
                 {t('schedule')}

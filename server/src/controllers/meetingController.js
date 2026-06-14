@@ -1,4 +1,4 @@
-import { createMeetingInDb, getMeetingsByGroup } from "../services/meetingService.js";
+import { createMeetingInDb, getMeetingsByGroup, deleteMeetingFromDb } from "../services/meetingService.js";
 
 /**
  * Endpoint to add a new meeting.
@@ -43,3 +43,27 @@ export const fetchMeetingsByGroup = async (req, res) => {
     res.status(error.status || 500).json({ error: error.message || "Failed to fetch meetings" });
   }
 };
+
+/**
+ * Endpoint to delete a meeting.
+ */
+export const removeMeeting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["x-user-id"];
+
+    if (!id) {
+      return res.status(400).json({ error: "Meeting ID is required as a route parameter" });
+    }
+    if (!userId) {
+      return res.status(400).json({ error: "x-user-id header is required for authorization" });
+    }
+
+    const result = await deleteMeetingFromDb(id, userId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Delete meeting controller error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Failed to delete meeting" });
+  }
+};
+

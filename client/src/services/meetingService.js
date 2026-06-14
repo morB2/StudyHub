@@ -47,3 +47,26 @@ export const scheduleMeetingApi = async ({ groupId, title, startTime, location, 
 
   return response.json();
 };
+
+/**
+ * Deletes a meeting by ID from the server.
+ */
+export const deleteMeetingApi = async (meetingId, userId) => {
+  const response = await fetch(`${API_BASE}/${meetingId}`, {
+    method: "DELETE",
+    headers: {
+      "x-user-id": userId
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.error || errorData.message || "Failed to delete meeting";
+    const err = new Error(errorMessage);
+    err.status = response.status;
+    throw err;
+  }
+
+  return response.json();
+};
+
