@@ -1,6 +1,7 @@
 import {
     createFolder as createFolderService,
     getFoldersByGroup,
+    deleteFolder as deleteFolderService,
 } from "../services/folderService.js";
 
 export const createFolder = async (req, res) => {
@@ -45,6 +46,31 @@ export const fetchFoldersByGroup = async (req, res) => {
         res.status(200).json(folders);
     } catch (error) {
         console.error('Fetch folders error:', error);
+        const status = error.status || 500;
+        const payload = { error: error.message || 'Internal Server Error' };
+        if (error.code) payload.code = error.code;
+        if (error.details) payload.details = error.details;
+        res.status(status).json(payload);
+    }
+};
+
+export const removeFolder = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                error: "Folder ID parameter is required",
+            });
+        }
+
+        const result = await deleteFolderService(id);
+        res.status(200).json({
+            message: "Folder and all its contents deleted successfully",
+            ...result
+        });
+    } catch (error) {
+        console.error('Delete folder error:', error);
         const status = error.status || 500;
         const payload = { error: error.message || 'Internal Server Error' };
         if (error.code) payload.code = error.code;

@@ -27,3 +27,12 @@ export const createFolder = async ({ groupId, name, parentId = null, creatorId }
 
     return handleResponse(response);
 };
+
+export const deleteFolder = async (folderId) => {
+    const response = await fetch(`${API_BASE_URL}/folders/${encodeURIComponent(folderId)}`, {
+        method: "DELETE",
+    });
+
+    return handleResponse(response);
+};
+

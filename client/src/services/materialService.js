@@ -30,9 +30,28 @@ export const getMaterialsByGroup = async (groupId) => {
   return handleResponse(response);
 };
 
+export const searchMaterialsByGroup = async (groupId, query) => {
+  const response = await fetch(
+    `${API_BASE_URL}/groups/${encodeURIComponent(groupId)}/files/search?q=${encodeURIComponent(query)}`
+  );
+  return handleResponse(response);
+};
+
 export const deleteMaterialApi = async (id) => {
   const response = await fetch(`${API_BASE_URL}/materials/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   return handleResponse(response);
 };
+
+export const moveMaterialApi = async (id, folderId) => {
+  const response = await fetch(`${API_BASE_URL}/materials/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ folderId }),
+  });
+  return handleResponse(response);
+};
+

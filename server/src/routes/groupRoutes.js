@@ -10,6 +10,7 @@ import {
   unfollowGroupAction,
   fetchFollowedGroups,
 } from "../controllers/groupController.js";
+import { searchMaterialsInGroup } from "../controllers/materialController.js";
 
 const router = express.Router();
 
@@ -24,6 +25,9 @@ router.get("/user/:userId", fetchUserGroups);
 
 // Route to fetch a specific group by ID
 router.get("/:id", fetchGroupById);
+
+// Route to search files inside a group
+router.get("/:id/files/search", searchMaterialsInGroup);
 
 // Route to join a group
 router.post("/:id/join", joinGroupAction);
