@@ -127,7 +127,17 @@ export const translations = {
     searchingFiles: "Searching files...",
     noFilesFoundInGroup: "We didn't find any files with this name in this group",
     tryAnotherSearch: "Try another search or reset the field to return to the regular view.",
-    folderEmpty: "Folder is empty"
+    folderEmpty: "Folder is empty",
+    scheduleNewMeeting: "Schedule New Meeting",
+    meetingDesc: "Coordinate a group study session or meeting.",
+    meetingDateTime: "Date & Time",
+    locationOrLinkOptional: "Location or Link (Optional)",
+    fillRequiredFields: "Please fill out all required fields.",
+    pastDateError: "Cannot schedule a meeting in the past.",
+    meetingScheduledSuccess: "Meeting scheduled successfully!",
+    online: "Online",
+    meetingTitlePlaceholder: "e.g. Exam Prep Session",
+    meetingLocationPlaceholder: "e.g. Zoom, Library, etc."
   },
   he: {
     appName: "StudyHub",
@@ -255,6 +265,16 @@ export const translations = {
     searchingFiles: "מחפש קבצים...",
     noFilesFoundInGroup: "לא מצאנו קבצים בשם הזה בקבוצה הזו",
     tryAnotherSearch: "נסה חיפוש אחר או אפס את השדה כדי לחזור לתצוגה הרגילה.",
-    folderEmpty: "התיקייה ריקה"
+    folderEmpty: "התיקייה ריקה",
+    scheduleNewMeeting: "תזמון מפגש חדש",
+    meetingDesc: "תיאום פגישה או מפגש למידה קבוצתי.",
+    meetingDateTime: "תאריך ושעה",
+    locationOrLinkOptional: "מיקום או קישור (אופציונלי)",
+    fillRequiredFields: "אנא מלא את כל שדות החובה.",
+    pastDateError: "לא ניתן לקבוע מפגש בעבר.",
+    meetingScheduledSuccess: "המפגש תוזמן בהצלחה!",
+    online: "מקוון",
+    meetingTitlePlaceholder: "לדוגמה: מרתון למידה למבחן",
+    meetingLocationPlaceholder: "לדוגמה: זום, ספרייה וכו'"
   }
 };

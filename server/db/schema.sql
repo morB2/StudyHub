@@ -32,3 +32,24 @@ ALTER TABLE followed_groups DISABLE ROW LEVEL SECURITY;
 
 -- Grant permissions to access the followed_groups table
 GRANT ALL ON TABLE followed_groups TO anon, authenticated, service_role;
+
+-- Create meetings table
+CREATE TABLE IF NOT EXISTS meetings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    start_datetime TIMESTAMP WITH TIME ZONE NOT NULL,
+    location_or_link VARCHAR(1024),
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX idx_meetings_group_id ON meetings(group_id);
+CREATE INDEX idx_meetings_created_by ON meetings(created_by);
+
+-- Disable Row Level Security (RLS) for meetings
+ALTER TABLE meetings DISABLE ROW LEVEL SECURITY;
+
+-- Grant permissions to access the meetings table
+GRANT ALL ON TABLE meetings TO anon, authenticated, service_role;
+
