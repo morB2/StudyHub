@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
 import {
   mockChatMessages, mockMaterials, mockMeetings,
-  mockNotices, mockFolders, mockInvitations, mockUsers, mockGroups
+  mockFolders, mockInvitations, mockUsers
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
 import { getMaterialsByGroup, searchMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
+import { getNoticesByGroup, createNotice, deleteNoticeApi } from '../services/noticeService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -135,7 +136,13 @@ export default function GroupDetail({ group, onBack, showToast }) {
       .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
     setMeetings(filteredMeetings);
 
-    setNotices(mockNotices.filter(n => n.groupId === groupDetails.id));
+    try {
+      const serverNotices = await getNoticesByGroup(groupDetails.id);
+      setNotices(Array.isArray(serverNotices) ? serverNotices : []);
+    } catch (error) {
+      console.error('Failed to fetch notices from server:', error);
+      setNotices([]);
+    }
 
     if (groupDetails.memberDetails && groupDetails.memberDetails.length > 0) {
       setGroupMembers(groupDetails.memberDetails);
@@ -611,25 +618,48 @@ export default function GroupDetail({ group, onBack, showToast }) {
     refreshAllData();
   };
 
-  // --- פעולות לוח מודעות ---
-  const handlePostNotice = (e) => {
+  const handlePostNotice = async (e) => {
     e.preventDefault();
     if (!noticeTitle.trim() || !noticeContent.trim() || !auth.currentUser) return;
 
-    const notice = {
-      id: 'not_' + Math.random().toString(36).substr(2, 9),
-      groupId: groupDetails.id,
-      authorId: auth.currentUser.uid,
-      authorName: auth.currentUser.displayName || 'Anonymous',
-      title: noticeTitle.trim(),
-      content: noticeContent.trim(),
-      createdAt: new Date()
-    };
+    try {
+      const newNotice = await createNotice({
+        groupId: groupDetails.id,
+        authorId: auth.currentUser.uid,
+        title: noticeTitle.trim(),
+        content: noticeContent.trim()
+      });
 
-    mockNotices.push(notice);
-    setNoticeTitle('');
-    setNoticeContent('');
-    refreshAllData();
+      setNotices(prev => [newNotice, ...prev]);
+      setNoticeTitle('');
+      setNoticeContent('');
+      notify(t('createNotice') || "Notice Posted", t('saved') || "Notice published successfully!", 'success');
+    } catch (error) {
+      console.error('Failed to post notice:', error);
+      notify(t('error') || 'Error', error.message || 'Failed to post notice', 'error');
+    }
+  };
+
+  const handleDeleteNotice = (notice) => {
+    setConfirmModal({
+      isOpen: true,
+      title: t('deleteConfirm') || "Delete Notice",
+      message: `${t('deleteConfirm') || "Are you sure you want to delete this?"} "${notice.title}"`,
+      icon: Trash2,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteNoticeApi(notice.id, auth.currentUser.uid);
+          setNotices(prev => prev.filter(n => n.id !== notice.id));
+          notify(t('deleteConfirm') || "Notice Deleted", t('saved') || "Notice deleted successfully", 'success');
+        } catch (error) {
+          console.error("Failed to delete notice:", error);
+          notify(t('error') || 'Error', error.message || 'Failed to delete notice', 'error');
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
   };
 
   // --- פעולות חברים והזמנות ---
@@ -669,15 +699,6 @@ export default function GroupDetail({ group, onBack, showToast }) {
           const userId = auth.currentUser.uid;
           await leaveGroupApi(groupDetails.id, userId);
 
-          // Update global mockGroups state for backward compatibility if needed
-          const currentGroup = mockGroups.find(g => g.id === groupDetails.id);
-          if (currentGroup) {
-            currentGroup.members = currentGroup.members.filter(uid => String(uid) !== String(userId));
-            if (currentGroup.members.length === 0) {
-              const idx = mockGroups.findIndex(g => g.id === groupDetails.id);
-              if (idx !== -1) mockGroups.splice(idx, 1);
-            }
-          }
 
           notify(t('leaveGroup'), t('leftGroup') || "Left group successfully", 'success');
 
@@ -1278,42 +1299,53 @@ export default function GroupDetail({ group, onBack, showToast }) {
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-gray-900">{t('noticeBoard')}</h3>
                 {notices.length === 0 && (
-                  <p className="text-sm text-gray-400 italic text-center py-8 bg-white rounded-3xl border border-gray-100 shadow-sm">No notices posted yet</p>
+                  <p className="text-sm text-gray-400 italic text-center py-8 bg-white rounded-3xl border border-gray-100 shadow-sm">{t('noNoticesYet') || 'No notices posted yet'}</p>
                 )}
                 {notices.map(notice => (
                   <div key={notice.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-2 text-left">
                     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
                       <h4 className="font-bold text-sm text-indigo-600">{notice.title}</h4>
-                      <span className="text-[10px] font-medium text-gray-400">{format(new Date(notice.createdAt), 'dd/MM/yyyy')}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-medium text-gray-400">{format(new Date(notice.createdAt), 'dd/MM/yyyy')}</span>
+                        {auth.currentUser && String(notice.authorId) === String(auth.currentUser.uid) && (
+                          <button
+                            onClick={() => handleDeleteNotice(notice)}
+                            className="text-gray-300 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                            title={t('deleteConfirm') || 'Delete Notice'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm text-gray-600 leading-relaxed">{notice.content}</p>
-                    <p className="text-[10px] text-gray-400 pt-1 font-bold">By: {notice.authorName}</p>
+                    <p className="text-[10px] text-gray-400 pt-1 font-bold">{t('by') || 'By:'} {notice.authorName}</p>
                   </div>
                 ))}
               </div>
 
               {/* טופס פרסום מודעה חדשה */}
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm h-fit">
-                <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2 mb-4">Post New Notice</h3>
+                <h3 className="text-sm font-black text-gray-900 border-b border-gray-50 pb-2 mb-4">{t('postNewNotice') || 'Post New Notice'}</h3>
                 <form onSubmit={handlePostNotice} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Title</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">{t('noticeTitle') || 'Title'}</label>
                     <input
-                      type="text" required placeholder="e.g. Change in Meeting Location"
+                      type="text" required placeholder={isRTL ? "לדוגמה: שינוי מיקום המפגש" : "e.g. Change in Meeting Location"}
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Content</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">{t('noticeContent') || 'Content'}</label>
                     <textarea
-                      required rows={4} placeholder="Write down your updates for the group..."
+                      required rows={4} placeholder={isRTL ? "כתוב את העדכון שלך עבור הקבוצה..." : "Write down your updates for the group..."}
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
                       value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)}
                     />
                   </div>
                   <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer">
-                    Post Update
+                    {t('postUpdate') || 'Post Update'}
                   </button>
                 </form>
               </div>
