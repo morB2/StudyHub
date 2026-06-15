@@ -33,6 +33,23 @@ ALTER TABLE followed_groups DISABLE ROW LEVEL SECURITY;
 -- Grant permissions to access the followed_groups table
 GRANT ALL ON TABLE followed_groups TO anon, authenticated, service_role;
 
+-- Create notices table
+CREATE TABLE IF NOT EXISTS notices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID REFERENCES groups(id) ON DELETE CASCADE NOT NULL,
+    author_id BIGINT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Disable Row Level Security (RLS) for notices
+ALTER TABLE notices DISABLE ROW LEVEL SECURITY;
+
+-- Grant permissions to access the notices table
+GRANT ALL ON TABLE notices TO anon, authenticated, service_role;
+
+
 -- Create meetings table
 CREATE TABLE IF NOT EXISTS meetings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
