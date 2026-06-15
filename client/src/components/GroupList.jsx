@@ -24,7 +24,7 @@ export default function GroupList({ onSelectGroup, showToast }) {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     icon: null,
     type: 'indigo'
   });
@@ -99,9 +99,9 @@ export default function GroupList({ onSelectGroup, showToast }) {
     }
 
     const userId = auth.currentUser.uid;
-    const isMember = group.members.includes(userId) || 
-                     group.members.includes(Number(userId)) || 
-                     group.members.includes(String(userId));
+    const isMember = group.members.includes(userId) ||
+      group.members.includes(Number(userId)) ||
+      group.members.includes(String(userId));
 
     if (isMember) {
       triggerConfirm({
@@ -160,15 +160,15 @@ export default function GroupList({ onSelectGroup, showToast }) {
       g.members.includes(String(auth.currentUser.uid))
     );
     const isPublic = !g.isPrivate;
-    const matchesSearch = 
+    const matchesSearch =
       !filters.search ||
       g.name.toLowerCase().includes(filters.search.toLowerCase()) ||
       g.subject.toLowerCase().includes(filters.search.toLowerCase());
-    
-    const matchesSubject = 
+
+    const matchesSubject =
       !filters.subject ||
       g.subject === filters.subject;
-    
+
     return matchesSearch && matchesSubject && (isPublic || isMember);
   });
 
@@ -199,7 +199,7 @@ export default function GroupList({ onSelectGroup, showToast }) {
           {groups.map(group => {
             const isMember = auth.currentUser && group.members.includes(auth.currentUser.uid);
             return (
-              <div 
+              <div
                 key={group.id}
                 onClick={async () => {
                   if (isMember) {
@@ -229,8 +229,8 @@ export default function GroupList({ onSelectGroup, showToast }) {
                       {group.subject}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {group.createdAt?.toDate 
-                        ? format(group.createdAt.toDate(), 'MMM d, yyyy') 
+                      {group.createdAt?.toDate
+                        ? format(group.createdAt.toDate(), 'MMM d, yyyy')
                         : format(new Date(group.createdAt), 'MMM d, yyyy')}
                     </span>
                   </div>
@@ -238,17 +238,17 @@ export default function GroupList({ onSelectGroup, showToast }) {
                     {group.name}
                   </h3>
                   <p className="text-gray-600 text-sm line-clamp-2 mb-4 text-left">
-                    {group.description || 'No description provided.'}
+                    {group.description || t('noDescription')}
                   </p>
                 </div>
-                
+
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
                   <div className="flex items-center gap-2 text-gray-500 text-sm">
                     <Users size={16} />
-                    <span>{group.members.length} members</span>
+                    <span>{group.members.length} {t('members')}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <GroupFollowToggle 
+                    <GroupFollowToggle
                       groupId={group.id}
                       userId={auth.currentUser?.uid}
                       showToast={showToast}
@@ -257,11 +257,11 @@ export default function GroupList({ onSelectGroup, showToast }) {
                       onClick={(e) => handleJoinLeave(e, group)}
                       className={cn(
                         "p-2 rounded-lg transition-all cursor-pointer",
-                        isMember 
-                          ? "bg-red-50 text-red-600 hover:bg-red-100" 
+                        isMember
+                          ? "bg-red-50 text-red-600 hover:bg-red-100"
                           : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
                       )}
-                      title={isMember ? "Leave Group" : "Join Group"}
+                      title={isMember ? t('leaveGroup') : t('joinGroup')}
                     >
                       {isMember ? <UserMinus size={18} /> : <UserPlus size={18} />}
                     </button>
@@ -291,7 +291,7 @@ export default function GroupList({ onSelectGroup, showToast }) {
         </h2>
       </div>
 
-      <GroupFilters 
+      <GroupFilters
         subjects={uniqueSubjects}
         filters={filters}
         onFilterChange={setFilters}
@@ -319,7 +319,7 @@ export default function GroupList({ onSelectGroup, showToast }) {
       )}
 
       {/* Reusable Confirmation Modal */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}

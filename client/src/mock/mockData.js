@@ -100,18 +100,6 @@ export const mockMeetings = [
   }
 ];
 
-// לוח מודעות לדוגמה
-export const mockNotices = [
-  {
-    id: "notice_1",
-    groupId: "group_1",
-    authorId: "user_vsc_123",
-    authorName: "ישראל ישראלי",
-    title: "שינוי מועד המפגש הקרוב",
-    content: "שימו לב חברים, המפגש של יום חמישי נדחה בשעה אחת. נתחיל ב-19:00 במקום ב-18:00.",
-    createdAt: new Date(1715008000 * 1000)
-  }
-];
 
 // הזמנות לדוגמה לקבוצות פרטיות
 export const mockInvitations = [
