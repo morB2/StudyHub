@@ -3,6 +3,7 @@ import {
   createNotice,
   fetchNoticesByGroup,
   removeNotice,
+  improveNoticeText,
 } from "../controllers/noticeController.js";
 
 const router = express.Router();
@@ -15,5 +16,8 @@ router.get("/", fetchNoticesByGroup);
 
 // Route to delete a notice
 router.delete("/:id", removeNotice);
+
+// Route to improve a notice content using AI
+router.post("/improve", improveNoticeText);
 
 export default router;

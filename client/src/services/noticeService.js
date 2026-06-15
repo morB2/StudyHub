@@ -55,3 +55,17 @@ export const deleteNoticeApi = async (noticeId, authorId) => {
     return handleResponse(response);
 };
 
+/**
+ * Sends a request to the backend to improve notice content using AI.
+ * @param {string} content - The original notice content.
+ * @returns {Promise<Object>} The response containing the improved text.
+ */
+export const improveNoticeApi = async (content) => {
+    const response = await fetch(`${API_BASE_URL}/notices/improve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+    });
+    return handleResponse(response);
+};
+

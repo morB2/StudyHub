@@ -2,6 +2,7 @@ import {
   createNotice as createNoticeService,
   getNoticesByGroup as getNoticesByGroupService,
   deleteNotice as deleteNoticeService,
+  improveNoticeText as improveNoticeTextService,
 } from "../services/noticeService.js";
 
 /**
@@ -88,6 +89,36 @@ export const removeNotice = async (req, res) => {
     const status = error.status || 500;
     res.status(status).json({
       error: error.message || "Failed to delete notice",
+    });
+  }
+};
+
+/**
+ * Controller to improve notice text using AI (Gemini).
+ */
+export const improveNoticeText = async (req, res) => {
+  try {
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({
+        error: "Content is required for AI improvement",
+      });
+    }
+
+    const wordCount = content.trim().split(/\s+/).length;
+    if (wordCount < 5) {
+      return res.status(400).json({
+        error: "Please write at least 5 words so the AI can base its improvement on it.",
+      });
+    }
+
+    const improvedText = await improveNoticeTextService(content);
+    res.status(200).json({ improvedText });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      error: error.message || "Failed to improve notice text",
     });
   }
 };

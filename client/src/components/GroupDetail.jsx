@@ -7,7 +7,7 @@ import {
 } from '../mock/mockData';
 import { createFolder, getFoldersByGroup, deleteFolder } from '../services/folderService';
 import { getMaterialsByGroup, searchMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
-import { getNoticesByGroup, createNotice, deleteNoticeApi } from '../services/noticeService';
+import { getNoticesByGroup, createNotice, deleteNoticeApi, improveNoticeApi } from '../services/noticeService';
 import { cn } from '../lib/utils';
 import {
   MessageSquare, FileText, Calendar, Send, Trash2, Download, Plus, X,
@@ -60,6 +60,8 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [meetingLocation, setMeetingLocation] = useState('');
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeContent, setNoticeContent] = useState('');
+  const [isImprovingNotice, setIsImprovingNotice] = useState(false);
+  const [aiNoticeSuggestion, setAiNoticeSuggestion] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
 
   // טוגלים ופאנלים צדדיים
@@ -633,11 +635,83 @@ export default function GroupDetail({ group, onBack, showToast }) {
       setNotices(prev => [newNotice, ...prev]);
       setNoticeTitle('');
       setNoticeContent('');
+      setAiNoticeSuggestion('');
       notify(t('createNotice') || "Notice Posted", t('saved') || "Notice published successfully!", 'success');
     } catch (error) {
       console.error('Failed to post notice:', error);
       notify(t('error') || 'Error', error.message || 'Failed to post notice', 'error');
     }
+  };
+
+  const handleAiImprove = async () => {
+    const trimmed = noticeContent.trim();
+    if (!trimmed) {
+      notify(t('error') || 'Error', isRTL ? 'אנא הזן תוכן למודעה לפני השיפור' : 'Please enter notice content before improving', 'error');
+      return;
+    }
+
+    const wordCount = trimmed.split(/\s+/).length;
+    if (wordCount < 5) {
+      notify(
+        t('error') || 'Error',
+        isRTL
+          ? 'נא לכתוב לפחות 5 מילים כדי שלבינה המלאכותית יהיה על מה להתבסס.'
+          : 'Please write at least 5 words so the AI can base its improvement on it.',
+        'error'
+      );
+      return;
+    }
+
+    setIsImprovingNotice(true);
+    setAiNoticeSuggestion('');
+    try {
+      const data = await improveNoticeApi(trimmed);
+      if (data.improvedText) {
+        setAiNoticeSuggestion(data.improvedText);
+        notify(
+          isRTL ? 'הצעה מוכנה' : 'Suggestion ready',
+          isRTL ? 'ה-AI הציע גרסה משופרת לטקסט שלך' : 'AI suggested an improved version of your text',
+          'success'
+        );
+      }
+    } catch (error) {
+      if (error.message === 'ERROR_INAPPROPRIATE_CONTENT' || error.message.includes('inappropriate') || error.message.includes('unrelated')) {
+        notify(
+          t('error') || 'Error',
+          isRTL
+            ? 'התוכן שרשמת אינו הולם או שאינו קשור לפעילות קבוצת לימוד.'
+            : 'The content you entered is inappropriate or unrelated to study group activities.',
+          'error'
+        );
+      } else if (error.message === 'ERROR_AI_OVERLOAD' || error.status === 503 || error.message.includes('OVERLOAD') || error.message.includes('overload') || error.message.includes('503')) {
+        notify(
+          t('error') || 'Error',
+          isRTL
+            ? 'עקב עומס נסה שוב מאוחר יותר.'
+            : 'Due to heavy load, please try again later.',
+          'error'
+        );
+      } else {
+        notify(
+          t('error') || 'Error',
+          isRTL ? 'שיפור הטקסט נכשל. נסה שנית מאוחר יותר.' : 'Failed to improve text. Please try again later.',
+          'error'
+        );
+      }
+    } finally {
+      setIsImprovingNotice(false);
+    }
+  };
+
+  const handleAcceptSuggestion = () => {
+    if (aiNoticeSuggestion) {
+      setNoticeContent(aiNoticeSuggestion);
+      setAiNoticeSuggestion('');
+    }
+  };
+
+  const handleRejectSuggestion = () => {
+    setAiNoticeSuggestion('');
   };
 
   const handleDeleteNotice = (notice) => {
@@ -812,7 +886,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
 
         {/* כפתורי עזר עליוניים */}
         <div className="flex items-center gap-2">
-          <GroupFollowToggle 
+          <GroupFollowToggle
             groupId={groupDetails.id}
             userId={auth.currentUser?.uid}
             showToast={showToast}
@@ -1337,13 +1411,55 @@ export default function GroupDetail({ group, onBack, showToast }) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">{t('noticeContent') || 'Content'}</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase">{t('noticeContent') || 'Content'}</label>
+                      <button
+                        type="button"
+                        onClick={handleAiImprove}
+                        disabled={isImprovingNotice}
+                        title={isImprovingNotice ? t('improving') : t('aiImprove')}
+                        className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg border border-amber-200 transition-all disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center"
+                      >
+                        {isImprovingNotice ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-amber-500" />}
+                      </button>
+                    </div>
                     <textarea
                       required rows={4} placeholder={isRTL ? "כתוב את העדכון שלך עבור הקבוצה..." : "Write down your updates for the group..."}
                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
                       value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)}
                     />
                   </div>
+
+                  {aiNoticeSuggestion && (
+                    <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 space-y-3 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                          <Sparkles size={14} className="text-amber-500" />
+                          <span>{t('aiSuggestion')}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleAcceptSuggestion}
+                            className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer shadow-sm shadow-amber-100"
+                          >
+                            {t('accept')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRejectSuggestion}
+                            className="text-xs bg-white hover:bg-gray-50 text-gray-500 font-bold px-2.5 py-1 border border-gray-200 rounded-lg transition-all cursor-pointer"
+                          >
+                            {t('decline')}
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-700 bg-white/60 p-3 rounded-xl border border-amber-100/50 leading-relaxed max-h-32 overflow-y-auto">
+                        {aiNoticeSuggestion}
+                      </p>
+                    </div>
+                  )}
+
                   <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 text-xs cursor-pointer">
                     {t('postUpdate') || 'Post Update'}
                   </button>
