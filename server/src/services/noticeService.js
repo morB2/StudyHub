@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import connectSupabase from "../config/supabasedb.js";
+import { checkContentSafety, getAIModel } from "./aiService.js";
 
 const supabase = connectSupabase();
 
@@ -152,35 +152,14 @@ export const deleteNotice = async (noticeId, authorId) => {
  * @returns {Promise<string>} Improved text or throws an error.
  */
 export const improveNoticeText = async (content) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  // 1. Safety check
+  checkContentSafety(content);
 
-  // 1. Safety filter (preprocessing check)
-  const cleanText = content.trim().replace(/\s+/g, " ");
-
-  const badWords = [
-    "hack", "virus", "bomb", "exploit", "injection", "bypass", "malicious",
-    "porn", "casino", "gambling", "drugs", "viagra", "buy now", "commercial",
-    "terror", "attack", "kill", "פריצה", "סמים", "האק", "קזינו", "הימורים",
-    "וירוס", "פצצה", "סקס", "מכירות", "פרסומת", "ספאם", "תקיפה", "רצח",
-    "גניבה", "טרור"
-  ];
-  const matchedBadWord = badWords.find((word) => cleanText.toLowerCase().includes(word));
-  if (matchedBadWord) {
-    const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
-    error.status = 400;
-    throw error;
-  }
-
-  if (!apiKey) {
-    const error = new Error("ERROR_AI_OVERLOAD");
-    error.status = 503;
-    throw error;
-  }
+  // 2. Obtain model (validates API key)
+  const model = getAIModel();
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+    const cleanText = content.trim().replace(/\s+/g, " ");
     const systemPrompt = `You are a professional writing assistant for a student study group collaboration platform.
 Your task is to improve the clarity, readability, spelling, and professionalism of the student's notice.
 
