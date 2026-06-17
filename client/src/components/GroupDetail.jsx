@@ -1,10 +1,7 @@
 // client/src/components/GroupDetail.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
-import {
-  mockChatMessages, mockMaterials,
-  mockFolders, mockInvitations, mockUsers
-} from '../mock/mockData';
+import {mockInvitations} from '../mock/mockData';
 import { getFoldersByGroup } from '../services/folderService';
 import { getMaterialsByGroup } from '../services/materialService';
 import { getMeetingsByGroupApi, scheduleMeetingApi, normalizeMeeting } from '../services/meetingService';
@@ -32,8 +29,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
   const [activeTab, setActiveTab] = useState('chat');
   const [groupDetails, setGroupDetails] = useState(group);
 
-  // Global group states synced with source of truth / mock data
-  const [messages, setMessages] = useState([]);
+  // Global group states synced with source of truth
   const [materials, setMaterials] = useState([]);
   const [folders, setFolders] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -81,7 +77,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
       }
     } catch (error) {
       console.error('Failed to load folders:', error);
-      setFolders(mockFolders.filter(f => f.groupId === groupDetails.id));
+      setFolders([]);
     }
   };
 
@@ -90,17 +86,12 @@ export default function GroupDetail({ group, onBack, showToast }) {
       return;
     }
 
-    const filteredMsgs = mockChatMessages
-      .filter(m => m.groupId === groupDetails.id)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    setMessages(filteredMsgs);
-
     try {
       const serverMaterials = await getMaterialsByGroup(groupDetails.id);
       setMaterials(Array.isArray(serverMaterials) ? serverMaterials : []);
     } catch (error) {
       console.error('Failed to fetch materials from server:', error);
-      setMaterials(mockMaterials.filter(m => m.groupId === groupDetails.id));
+      setMaterials([]);
     }
 
     await loadFolders();
@@ -130,15 +121,21 @@ export default function GroupDetail({ group, onBack, showToast }) {
         if (freshGroup.memberDetails && freshGroup.memberDetails.length > 0) {
           setGroupMembers(freshGroup.memberDetails);
         } else {
-          setGroupMembers(
-            mockUsers.filter(user => freshGroup.members?.some(id => String(id) === String(user.uid)))
-          );
+          const fallbackMembers = (freshGroup.members || []).map(uid => ({
+            uid,
+            displayName: `User ${uid}`,
+            email: ''
+          }));
+          setGroupMembers(fallbackMembers);
         }
       } catch (err) {
         console.error("Error fetching group members from server:", err);
-        setGroupMembers(
-          mockUsers.filter(user => groupDetails.members?.some(id => String(id) === String(user.uid)))
-        );
+        const fallbackMembers = (groupDetails.members || []).map(uid => ({
+          uid,
+          displayName: `User ${uid}`,
+          email: ''
+        }));
+        setGroupMembers(fallbackMembers);
       }
     }
   };
