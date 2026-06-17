@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth } from '../firebase';
-import { mockFolders, mockMaterials } from '../mock/mockData';
 import { createFolder, deleteFolder } from '../services/folderService';
 import { searchMaterialsByGroup, uploadMaterialApi, deleteMaterialApi, moveMaterialApi } from '../services/materialService';
 import { cn } from '../lib/utils';
@@ -11,6 +10,7 @@ import {
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import ConfirmModal from './ConfirmModal';
+
 
 export default function MaterialsTab({
   groupId,
@@ -176,7 +176,6 @@ export default function MaterialsTab({
             storagePath: uploadedMaterial.storagePath,
           };
 
-          mockMaterials.push(newMaterial);
           setMaterials(prev => [...prev, newMaterial]);
         }
       } else {
@@ -191,7 +190,6 @@ export default function MaterialsTab({
           localUpload: false,
         };
 
-        mockMaterials.push(material);
         setMaterials(prev => [...prev, material]);
       }
 
@@ -214,12 +212,6 @@ export default function MaterialsTab({
       // Update local state
       setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, folderId } : m));
 
-      // Update mock data for backward compatibility / offline fallback
-      const mockIdx = mockMaterials.findIndex(m => m.id === materialId);
-      if (mockIdx !== -1) {
-        mockMaterials[mockIdx].folderId = folderId;
-      }
-
       notify(t('fileMovedSuccess') || 'File moved successfully', '', 'success');
     } catch (error) {
       console.error('Failed to move material:', error);
@@ -233,27 +225,10 @@ export default function MaterialsTab({
     }
   };
 
-  const deleteMaterialLocalFallback = (id, type) => {
-    if (type === 'folder') {
-      const idx = mockFolders.findIndex(f => f.id === id);
-      if (idx !== -1) mockFolders.splice(idx, 1);
-      mockMaterials.forEach(m => {
-        if (m.folderId === id) m.folderId = null;
-      });
-    } else {
-      const idx = mockMaterials.findIndex(m => m.id === id);
-      if (idx !== -1) mockMaterials.splice(idx, 1);
-    }
-    refreshAllData();
-  };
-
   const deleteMaterialFromServer = async (material) => {
     try {
       await deleteMaterialApi(material.id);
       setMaterials(prev => prev.filter(m => m.id !== material.id));
-
-      const mockIndex = mockMaterials.findIndex(m => m.id === material.id);
-      if (mockIndex !== -1) mockMaterials.splice(mockIndex, 1);
 
       notify(t('fileDeleted') || 'File deleted', '', 'success');
     } catch (error) {
@@ -275,16 +250,6 @@ export default function MaterialsTab({
       // Update local states
       setFolders(prev => prev.filter(f => !deletedFolderIds.includes(f.id)));
       setMaterials(prev => prev.filter(m => !deletedMaterialIds.includes(m.id)));
-
-      // Update mock data for backward compatibility / offline fallback
-      deletedFolderIds.forEach(id => {
-        const mockIdx = mockFolders.findIndex(f => f.id === id);
-        if (mockIdx !== -1) mockFolders.splice(mockIdx, 1);
-      });
-      deletedMaterialIds.forEach(id => {
-        const mockIdx = mockMaterials.findIndex(m => m.id === id);
-        if (mockIdx !== -1) mockMaterials.splice(mockIdx, 1);
-      });
 
       // If we are currently inside one of the deleted folders, reset view to root
       if (deletedFolderIds.includes(currentFolderId)) {
@@ -348,8 +313,6 @@ export default function MaterialsTab({
       const material = materials.find(m => m.id === id);
       if (material) {
         promptDeleteMaterial(material);
-      } else {
-        deleteMaterialLocalFallback(id, type);
       }
     }
   };

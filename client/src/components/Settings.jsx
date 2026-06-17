@@ -29,7 +29,7 @@ export default function Settings({ onClose }) {
           chat: chatNotifications,
           meetings: meetingNotifications
         };
-        console.log("Mock Settings Saved:", auth.currentUser.notificationSettings);
+        console.log("Settings Saved:", auth.currentUser.notificationSettings);
       }
       onClose();
     } catch (error) {
