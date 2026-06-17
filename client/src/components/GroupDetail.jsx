@@ -389,9 +389,7 @@ export default function GroupDetail({ group, onBack, showToast }) {
           {/* Tab contents */}
           {activeTab === 'chat' && (
             <ChatTab
-              groupId={groupDetails.id}
-              messages={messages}
-              refreshAllData={refreshAllData}
+              groupId={groupDetails.id} groupMembers={groupMembers}
             />
           )}
 
