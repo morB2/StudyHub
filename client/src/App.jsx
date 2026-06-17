@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { auth, onAuthStateChanged } from './firebase';
-import { mockGroups } from './mock/mockData';
+import { fetchGroupByIdApi } from './services/groupService';
 import { useLanguage } from './contexts/LanguageContext';
 // ייבוא קומפוננטות המסכים והרכיבים
 import LandingPage from './components/LandingPage';
@@ -51,11 +51,15 @@ export default function App() {
     }, 4000);
   };
 
-  const handleToastClick = (toast) => {
+  const handleToastClick = async (toast) => {
     if (toast.groupId) {
-      const foundGroup = mockGroups.find(g => g.id === toast.groupId);
-      if (foundGroup) {
-        setSelectedGroup(foundGroup);
+      try {
+        const foundGroup = await fetchGroupByIdApi(toast.groupId);
+        if (foundGroup) {
+          setSelectedGroup(foundGroup);
+        }
+      } catch (err) {
+        console.error("Failed to fetch group on toast click:", err);
       }
     }
     setToasts(prev => prev.filter(t => t.id !== toast.id));
