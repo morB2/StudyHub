@@ -191,7 +191,7 @@ export default function VideoCall({ groupId, groupMembers, onLeave }) {
   return (
     <div className="flex flex-col p-6 text-white bg-gray-900 rounded-2xl h-[600px]">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Group Call: {groupId}</h2>
+        <h2 className="text-xl font-semibold"></h2>
       </div>
 
       <div className="flex-1 grid grid-cols-2 gap-4 auto-rows-fr">

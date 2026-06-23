@@ -30,5 +30,4 @@ const connectSupabase = () => {
     process.exit(1);
   }
 };
-const supabase = connectSupabase();
 export default connectSupabase;
