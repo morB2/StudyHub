@@ -1,93 +1,111 @@
 # StudyHub
 
-מדריך קצר להרצת הפרויקט המקומי
+StudyHub is a modern, premium student collaboration platform designed to help students study better together in real-time. It enables users to create study groups, participate in chat rooms, publish notice boards, share study materials, schedule meetings, initiate simulated video calls, and leverage a smart AI Study Assistant powered by Google Gemini.
 
-דרישות מקדימות:
+---
 
-- Node.js (מומלץ v18+)
-- npm (מגיע עם Node)
+## Architecture Overview
 
-# StudyHub
+StudyHub is split into two main components:
+- **Frontend (Client)**: Built with **React**, **Vite**, **Tailwind CSS**, and **Lucide Icons**. It includes a full multi-language localization context (supporting Hebrew and English out-of-the-box).
+- **Backend (Server)**: Built with **Node.js (Express)**. It integrates with **Supabase** for database storage and **Google Generative AI (Gemini)** for natural language processing features.
 
-תיעוד קצר וממוקד להרצת הפרויקט המקומי ותיאור ה-client.
+---
 
-דרישות מקדימות
+## Prerequisites
 
-- `Node.js` (מומלץ v18+)
-- `npm` (מגיע עם Node)
+Before running the application, make sure you have the following installed:
+- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
+- [Node.js](https://nodejs.org/) (v18+ recommended, required for local running and testing)
+- [npm](https://www.npmjs.com/) (usually bundles with Node)
 
-הרצת הפרויקט בסביבת פיתוח
+---
 
-1. שרת (backend)
+## Environment Setup
 
+Create a `.env` file at the root of the project (next to `docker-compose.yml`) containing the required API keys and connection parameters:
+
+```env
+SUPABASE_URL=https://<your-supabase-project-id>.supabase.co
+SUPABASE_KEY=<your-supabase-service-role-key>
+GEMINI_API_KEY=<your-google-gemini-api-key>
+AGORA_APP_ID=<your-agora-app-id>
+AGORA_APP_CERTIFICATE=<your-agora-app-certificate>
+```
+
+---
+
+## Running the Project with Docker Compose
+
+To build and run the entire stack (both client and server) automatically in isolated Docker containers:
+
+1. **Start the containers**:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. **Access the application**:
+   - **Frontend (Client)**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
+   - **Backend (Server)**: The API server will be listening at [http://localhost:3001](http://localhost:3001).
+
+3. **Stop the containers**:
+   To stop and remove containers, networks, and volumes:
+   ```bash
+   docker-compose down
+   ```
+
+---
+
+## Running the Project Locally (Alternative)
+
+If you prefer to run the client and server locally without Docker:
+
+### 1. Server Setup
 ```bash
 cd server
 npm install
-# להרצה פשוטה (או להוספת סקריפט `start`):
-node index.js
-# או (לאחר הוספת "start": "node index.js" ב- package.json):
-npm start
+npm run dev
 ```
+The server will run on port `3001`.
 
-השרת מאזין ברירת מחדל על: http://localhost:3001
-
-2. לקוח (frontend) – Vite + React
-
+### 2. Client Setup
 ```bash
 cd client
 npm install
 npm run dev
 ```
+The Vite development server will start on port `5173`.
 
-ה-Dev server של Vite יופיע בדרך כלל על: http://localhost:5173
+---
 
-בניית הלקוח לפרודקשן
+## Running E2E Tests with Playwright
 
+Playwright is used for end-to-end testing of the main user flows. The tests run against the active client server at `http://localhost:5173` and backend at `http://localhost:3001`.
+
+### Pre-requisites for Testing
+Ensure that both client and server are running (either via Docker Compose or locally) and install the Playwright browsers:
 ```bash
-cd client
-npm run build
-npm run preview
+npx playwright install
 ```
 
-הערות חשובות על ה-client
+### Running Tests
 
-- ה-client בנוי עם React + Vite וכולל Tailwind CSS.
-- הפרויקט משתמש ב-mock של Firebase (קובץ `client/src/firebase.js`) — אין חיבור אמיתי ל-Firebase; כל פונקציות האימות/DB מדומות לצורך פיתוח מקומי.
-- נתוני הדמו נמצאים ב-`client/src/mock/mockData.js` ומשמשים להפעלת רכיבים בזמן פיתוח.
+- **Run all E2E tests** (headless mode):
+  ```bash
+  npx playwright test
+  ```
 
-תכונות מרכזיות ב-client
+- **Run E2E tests on a specific browser** (e.g., Chromium):
+  ```bash
+  npx playwright test --project=chromium
+  ```
 
-- מערכת משתמשים מדומה (login/register) ו-`Auth` UI.
-- יצירת וניהול קבוצות לימוד (`CreateGroup`, `GroupList`, `GroupDetail`).
-- גלריית חומרי לימוד ושיתוף קבצים (מדומה) — `mockMaterials`.
-- צ'אט/הודעות וקירות הודעות (mock data).
-- עוזר AI סימולטיבי (`AIAssistant`) שנותן תשובות מבוססות על התכנים בקבוצה.
-- מנהל התראות (Toasts) — `NotificationManager`.
-- מודאלים נוספים: `AuthModal`, `ProfileModal`, `Settings`, `InvitationsList`.
-- רכיב וידאו/שיחות (UI בלבד) — `VideoCall` (סימולציה / ממשק בלבד).
+- **Run E2E tests in Headed Mode** (displays the browser window during execution):
+  ```bash
+  npx playwright test --headed
+  ```
 
-קבצים חשובים בספריית הלקוח
-
-- `client/src/App.jsx` — כניסה מרכזית לאפליקציה וניווט בין תצוגות.
-- `client/src/firebase.js` — סימולציית Firebase (auth/db וכו').
-- `client/src/mock/mockData.js` — נתוני דמו: משתמשים, קבוצות, הודעות.
-- `client/src/components/` — קומפוננטות ה-UI (AIAssistant, CreateGroup, GroupList, GroupDetail ועוד).
-
-פיתוח מקומי וטיפים
-
-- אין צורך להגדיר משתני סביבה עבור Firebase — המערכת משתמשת במחלקות ופונקציות mock.
-- לשילוב עם שירות אמיתי (כדאי רק לשלב אחר בדיקה): עדכן את `client/src/firebase.js` כדי לייבא ולהגדיר את Firebase האמיתי ו-`db`/`auth`.
-- לשינוי שפה/כיווניות יש Context בשם `LanguageContext` (`client/src/contexts/LanguageContext.jsx`).
-
-בעיות נפוצות
-
-- אם דפדפן לא טוען את ה-client: ודא שהפעלת `npm install` בתיקיית `client` והרצת `npm run dev`.
-- אם ה-API לא זמין: ודא שהשרת פועל על פורט 3001.
-
-מפת דרכים / מה לבחון ראשון
-
-1. הרץ את ה-client (`npm run dev`) והסר שמקור הנתונים הוא `mock` — בדוק רכיבים כמו `GroupList` ו-`GroupDetail`.
-2. בדוק את ה-AIAssistant כדי לראות שהוא מגיב לשאילתות מבוססות Mock.
-3. אם תרצה חיבור אמיתי ל-backend/Firebase, אשמח להנחות אותך כיצד לשלב ולבדוק את הממשק.
-
-אם תרצה, אוכל להוסיף סקריפט `start` ל-`server/package.json` ולעזור לחבר Firebase אמיתי.
+- **Run E2E tests in Playwright Interactive UI Mode** (provides step snapshots, timelines, and live debugging):
+  ```bash
+  npx playwright test --ui
+  ```
