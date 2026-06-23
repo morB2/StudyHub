@@ -2,8 +2,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Bot, User } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { chatWithAiApi } from '../services/aiService';
 
-export default function AIAssistant({ materials, notices, onClose }) {
+export default function AIAssistant({
+  groupDetails,
+  materials,
+  meetings,
+  notices,
+  groupMembers,
+  onClose
+}) {
   const { t, isRTL } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -16,17 +24,26 @@ export default function AIAssistant({ materials, notices, onClose }) {
     }
   }, [messages]);
 
-  // הודעת פתיחה מדומה מה-AI ברגע שהרכיב נפתח
+  // Set initial greeting based on availability of materials
   useEffect(() => {
+    let greeting = "";
+    if (!materials || materials.length === 0) {
+      greeting = isRTL
+        ? `שלום! אני עוזר ה-AI של קבוצת הלימוד שלכם (${groupDetails?.name || ""}). שים לב שאין כרגע חומרי לימוד בקבוצה זו. במה אוכל לעזור לך ללמוד?`
+        : `Hello! I am your AI Study Assistant for "${groupDetails?.name || ""}". Please note that no study materials have been uploaded to this group yet. How can I help you study?`;
+    } else {
+      greeting = isRTL
+        ? `שלום! אני עוזר ה-AI של קבוצת הלימוד שלכם (${groupDetails?.name || ""}). סרקתי את ${materials.length} חומרי הלימוד ו-${notices?.length || 0} המודעות בלוח. במה אוכל לעזור לכם היום?`
+        : `Hello! I am your AI Study Assistant for "${groupDetails?.name || ""}". I've scanned your ${materials.length} study materials and ${notices?.length || 0} notices. How can I help you today?`;
+    }
+
     setMessages([
       {
         role: 'assistant',
-        content: isRTL 
-          ? `שלום! אני עוזר ה-AI של קבוצת הלימוד שלכם. סרקתי את ${materials.length} חומרי הלימוד ו-${notices.length} המודעות בלוח. במה אוכל לעזור לכם היום?`
-          : `Hello! I am your group's AI Study Assistant. I've scanned your ${materials.length} study materials and ${notices.length} notices. How can I help you ace your exams today?`
+        content: greeting
       }
     ]);
-  }, [materials.length, notices.length, isRTL]);
+  }, [materials?.length, notices?.length, isRTL, groupDetails?.name]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -37,48 +54,41 @@ export default function AIAssistant({ materials, notices, onClose }) {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
-    // סימולציה של חשיבת הבינה המלאכותית (לוקח שנייה וחצי להגיב)
-    setTimeout(() => {
-      let aiResponse = "";
+    try {
+      const context = {
+        name: groupDetails?.name,
+        subject: groupDetails?.subject,
+        materials,
+        meetings,
+        notices,
+        groupMembers
+      };
 
-      // יצירת תשובות חכמות מבוססות מילים-שמורות (Keywords) כדי שהסימולציה תרגיש אמיתית
-      const lowerInput = userMessage.toLowerCase();
+      const result = await chatWithAiApi(userMessage, context);
+
+      setMessages(prev => [...prev, { role: 'assistant', content: result.response }]);
+    } catch (error) {
+      console.error("Failed to fetch AI chatbot response:", error);
       
-      if (lowerInput.includes('חומר') || lowerInput.includes('material') || lowerInput.includes('קובץ')) {
-        if (materials.length > 0) {
-          const filesList = materials.map(m => m.fileName).join(', ');
-          aiResponse = isRTL 
-            ? `מצאתי בקבוצה את חומרי הלימוד הבאים: ${filesList}. אתם יכולים להוריד אותם ישירות מטאב "חומרי לימוד". מומלץ להתחיל לעבור על הסיכומים המרכזיים!`
-            : `I found the following study materials in this group: ${filesList}. You can access and download them in the "Materials" tab.`;
-        } else {
-          aiResponse = isRTL
-            ? "כרגע לא הועלו עדיין חומרי לימוד לקבוצה הזו. אתם יכולים להעלות קבצים בקלות דרך לשונית 'חומרי לימוד'!"
-            : "There are no study materials uploaded to this group yet. You can upload files via the 'Materials' tab!";
-        }
-      } else if (lowerInput.includes('הודע') || lowerInput.includes('notice') || lowerInput.includes('לוח')) {
-        if (notices.length > 0) {
-          const latestNotice = notices[0];
-          aiResponse = isRTL
-            ? `המודעה האחרונה בלוח פורסמה על ידי ${latestNotice.authorName} וכותרתה: "${latestNotice.title}". התוכן שלה הוא: "${latestNotice.content}".`
-            : `The latest notice on the board is "${latestNotice.title}" by ${latestNotice.authorName}: "${latestNotice.content}".`;
-        } else {
-          aiResponse = isRTL
-            ? "לוח המודעות של הקבוצה ריק כרגע. מנהלי הקבוצה יכולים לפרסם פה עדכונים חשובים או שינויים."
-            : "The notice board is currently empty. Group admins can post important updates here.";
-        }
-      } else if (lowerInput.includes('מבחן') || lowerInput.includes('exam') || lowerInput.includes('עזר')) {
-        aiResponse = isRTL
-          ? "כדי להתכונן למבחן בצורה הכי טובה, אני ממליץ לכם ליצור פגישת וידאו קבוצתית בלשונית ה-Video, לחלק ביניכם את נושאי הלימוד ולפתור יחד מבחנים משנים קודמות שנמצאים בטאב החומרים."
-          : "To prepare for exams, I highly recommend scheduling a team session in the Video tab, dividing topics among members, and solving past exams available in Materials.";
+      let systemErrorMsg = "";
+      if (error.message === 'ERROR_INAPPROPRIATE_CONTENT' || (error.message && error.message.includes('inappropriate'))) {
+        systemErrorMsg = isRTL
+          ? "הבקשה שלך נחסמה מכיוון שהיא אינה הולמת או שאינה קשור לפעילות קבוצת הלימוד."
+          : "Your request was blocked because it is inappropriate or unrelated to study group activities.";
+      } else if (error.message === 'ERROR_AI_OVERLOAD' || error.status === 503) {
+        systemErrorMsg = isRTL
+          ? "עקב עומס בשרת ה-AI, אנא נסה שוב מאוחר יותר."
+          : "Due to heavy AI server load, please try again later.";
       } else {
-        aiResponse = isRTL
-          ? `קיבלתי את השאלה שלך: "${userMessage}". כעוזר ה-AI של הקבוצה, אני ממליץ לשתף פעולה עם שאר חברי הלימוד בצ'אט, להעלות סיכומי שיעור ולתאם מפגשי חזרונים ביומן המשותף כדי להגיע לתוצאות מקסימליות!`
-          : `I noted your question: "${userMessage}". As your AI assistant, I recommend collaborating with group members in the chat and sharing lecture notes to study effectively!`;
+        systemErrorMsg = isRTL
+          ? "נכשלה יצירת קשר עם עוזר ה-AI. אנא נסה שוב."
+          : "Failed to connect to the AI Assistant. Please try again.";
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: systemErrorMsg, isSystemError: true }]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -91,7 +101,7 @@ export default function AIAssistant({ materials, notices, onClose }) {
         </div>
         <button 
           onClick={onClose}
-          className="p-1 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+          className="p-1 hover:bg-white/10 rounded-lg transition-colors cursor-pointer bg-transparent border-none text-white"
         >
           <X size={18} />
         </button>
@@ -113,7 +123,9 @@ export default function AIAssistant({ materials, notices, onClose }) {
               <div className={`px-4 py-2.5 rounded-2xl shadow-sm text-sm leading-relaxed ${
                 msg.role === 'user' 
                   ? 'bg-indigo-600 text-white rounded-tr-none' 
-                  : 'bg-white text-gray-900 border border-gray-100 rounded-tl-none'
+                  : msg.isSystemError
+                    ? 'bg-red-50 text-red-600 border border-red-100 rounded-tl-none font-semibold'
+                    : 'bg-white text-gray-900 border border-gray-100 rounded-tl-none'
               }`}>
                 {msg.content}
               </div>
@@ -123,7 +135,7 @@ export default function AIAssistant({ materials, notices, onClose }) {
         {isLoading && (
           <div className="flex justify-start items-center gap-2 text-gray-400">
             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
-              <Bot size={16} className="animate-pulse" />
+              <Bot size={16} className="animate-pulse text-indigo-500" />
             </div>
             <span className="text-xs font-medium italic">{t('aiThinking')}</span>
           </div>
@@ -143,7 +155,7 @@ export default function AIAssistant({ materials, notices, onClose }) {
         <button 
           type="submit"
           disabled={!input.trim() || isLoading}
-          className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all shadow-md cursor-pointer flex items-center justify-center"
+          className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all shadow-md cursor-pointer flex items-center justify-center border-none"
         >
           <Send size={16} className={isRTL ? "rotate-180" : ""} />
         </button>
