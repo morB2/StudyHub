@@ -35,40 +35,61 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // 1. הגדרת פרויקט ההתחברות (Setup) שירוץ תמיד ראשון וישמור את הסשן
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.js/,
+    },
+
+    // 2. דפדפני הבדיקה הרגילים - רצים ללא ה-SETUP
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/auth.setup.js', '**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
     },
 
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: ['**/auth.setup.js', '**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
     },
 
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: ['**/auth.setup.js', '**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
     },
 
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
+    // 3. דפדפני הבדיקה לטסטים של רחל - תלויים ב-setup ומשתמשים בקובץ השמור
+    {
+      name: 'chromium-auth',
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: 'playwright/.auth/user.json', // משתמש בסשן המחובר
+      },
+      testMatch: ['**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
+      dependencies: ['setup'], // רץ רק אחרי שה-setup מסתיים בהצלחה
+    },
 
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    {
+      name: 'firefox-auth',
+      use: { 
+        ...devices['Desktop Firefox'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      testMatch: ['**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
+      dependencies: ['setup'],
+    },
+
+    {
+      name: 'webkit-auth',
+      use: { 
+        ...devices['Desktop Safari'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      testMatch: ['**/file-management.spec.js', '**/folder-management.spec.js', '**/meetings.spec.js'],
+      dependencies: ['setup'],
+    },
   ],
 
   /* Run your local dev server before starting the tests */
