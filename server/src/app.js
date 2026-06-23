@@ -7,10 +7,12 @@ import authRoutes from "./routes/authRoutes.js";
 import materialRoutes from "./routes/materialRoutes.js";
 import meetingRoutes from "./routes/meetingRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
+import agoraRoutes from "./routes/agoraRoute.js";
 
 const app = express();
 
 app.use(cors());
+app.use("/agora", agoraRoutes);
 app.use(express.json());
 app.use("/users", userRoutes);
 app.use("/folders", folderRoutes);
