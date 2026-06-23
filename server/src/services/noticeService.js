@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import connectSupabase from "../config/supabasedb.js";
+import { checkContentSafety, getAIModel } from "./aiService.js";
 
 const supabase = connectSupabase();
 
@@ -152,36 +152,14 @@ export const deleteNotice = async (noticeId, authorId) => {
  * @returns {Promise<string>} Improved text or throws an error.
  */
 export const improveNoticeText = async (content) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  // 1. Safety check
+  checkContentSafety(content);
 
-  // 1. Safety filter (preprocessing check)
+  // 2. Obtain model (validates API key)
+  const model = getAIModel();
+
   const cleanText = content.trim().replace(/\s+/g, " ");
-
-  const badWords = [
-    "hack", "virus", "bomb", "exploit", "injection", "bypass", "malicious",
-    "porn", "casino", "gambling", "drugs", "viagra", "buy now", "commercial",
-    "terror", "attack", "kill", "פריצה", "סמים", "האק", "קזינו", "הימורים",
-    "וירוס", "פצצה", "סקס", "מכירות", "פרסומת", "ספאם", "תקיפה", "רצח",
-    "גניבה", "טרור"
-  ];
-  const matchedBadWord = badWords.find((word) => cleanText.toLowerCase().includes(word));
-  if (matchedBadWord) {
-    const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
-    error.status = 400;
-    throw error;
-  }
-
-  if (!apiKey) {
-    const error = new Error("ERROR_AI_OVERLOAD");
-    error.status = 503;
-    throw error;
-  }
-
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const systemPrompt = `You are a professional writing assistant for a student study group collaboration platform.
+  const systemPrompt = `You are a professional writing assistant for a student study group collaboration platform.
 Your task is to improve the clarity, readability, spelling, and professionalism of the student's notice.
 
 Follow these strict constraints:
@@ -193,33 +171,46 @@ Follow these strict constraints:
    You MUST return exactly the string: ERROR_INAPPROPRIATE_CONTENT
    Do not explain or say anything else. Just return ERROR_INAPPROPRIATE_CONTENT.`;
 
-    const result = await model.generateContent({
-      contents: [
-        { role: "user", parts: [{ text: `${systemPrompt}\n\nInput text to improve:\n"${cleanText}"` }] }
-      ]
-    });
+  let attempts = 0;
+  const maxAttempts = 3;
+  let lastError;
 
-    const responseText = result?.response?.text()?.trim();
+  while (attempts < maxAttempts) {
+    try {
+      const result = await model.generateContent({
+        contents: [
+          { role: "user", parts: [{ text: `${systemPrompt}\n\nInput text to improve:\n"${cleanText}"` }] }
+        ]
+      });
 
-    if (!responseText) {
-      const error = new Error("ERROR_AI_OVERLOAD");
-      error.status = 503;
-      throw error;
+      const responseText = result?.response?.text()?.trim();
+
+      if (!responseText) {
+        throw new Error("Empty response from model");
+      }
+
+      if (responseText.includes("ERROR_INAPPROPRIATE_CONTENT")) {
+        const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
+        error.status = 400;
+        throw error;
+      }
+
+      return responseText;
+    } catch (apiError) {
+      if (apiError.message === "ERROR_INAPPROPRIATE_CONTENT") {
+        throw apiError;
+      }
+      lastError = apiError;
+      console.warn(`Gemini API attempt ${attempts + 1} failed: ${apiError.message}. Retrying...`);
+      attempts++;
+      if (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
     }
-
-    if (responseText.includes("ERROR_INAPPROPRIATE_CONTENT")) {
-      const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
-      error.status = 400;
-      throw error;
-    }
-
-    return responseText;
-  } catch (apiError) {
-    if (apiError.message === "ERROR_INAPPROPRIATE_CONTENT") {
-      throw apiError;
-    }
-    const error = new Error("ERROR_AI_OVERLOAD");
-    error.status = 503;
-    throw error;
   }
+
+  console.error("Gemini API failed after all attempts:", lastError);
+  const error = new Error("ERROR_AI_OVERLOAD: " + lastError.message);
+  error.status = 503;
+  throw error;
 };

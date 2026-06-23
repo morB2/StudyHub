@@ -443,7 +443,14 @@ export default function GroupDetail({ group, onBack, showToast }) {
         {/* AI Assistant Sidebar */}
         {showAiAssistant && (
           <div className="lg:col-span-1">
-            <AIAssistant materials={materials} notices={notices} onClose={() => setShowAiAssistant(false)} />
+            <AIAssistant
+              groupDetails={groupDetails}
+              materials={materials}
+              meetings={meetings}
+              notices={notices}
+              groupMembers={groupMembers}
+              onClose={() => setShowAiAssistant(false)}
+            />
           </div>
         )}
       </div>
