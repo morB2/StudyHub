@@ -158,9 +158,8 @@ export const improveNoticeText = async (content) => {
   // 2. Obtain model (validates API key)
   const model = getAIModel();
 
-  try {
-    const cleanText = content.trim().replace(/\s+/g, " ");
-    const systemPrompt = `You are a professional writing assistant for a student study group collaboration platform.
+  const cleanText = content.trim().replace(/\s+/g, " ");
+  const systemPrompt = `You are a professional writing assistant for a student study group collaboration platform.
 Your task is to improve the clarity, readability, spelling, and professionalism of the student's notice.
 
 Follow these strict constraints:
@@ -172,33 +171,46 @@ Follow these strict constraints:
    You MUST return exactly the string: ERROR_INAPPROPRIATE_CONTENT
    Do not explain or say anything else. Just return ERROR_INAPPROPRIATE_CONTENT.`;
 
-    const result = await model.generateContent({
-      contents: [
-        { role: "user", parts: [{ text: `${systemPrompt}\n\nInput text to improve:\n"${cleanText}"` }] }
-      ]
-    });
+  let attempts = 0;
+  const maxAttempts = 3;
+  let lastError;
 
-    const responseText = result?.response?.text()?.trim();
+  while (attempts < maxAttempts) {
+    try {
+      const result = await model.generateContent({
+        contents: [
+          { role: "user", parts: [{ text: `${systemPrompt}\n\nInput text to improve:\n"${cleanText}"` }] }
+        ]
+      });
 
-    if (!responseText) {
-      const error = new Error("ERROR_AI_OVERLOAD");
-      error.status = 503;
-      throw error;
+      const responseText = result?.response?.text()?.trim();
+
+      if (!responseText) {
+        throw new Error("Empty response from model");
+      }
+
+      if (responseText.includes("ERROR_INAPPROPRIATE_CONTENT")) {
+        const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
+        error.status = 400;
+        throw error;
+      }
+
+      return responseText;
+    } catch (apiError) {
+      if (apiError.message === "ERROR_INAPPROPRIATE_CONTENT") {
+        throw apiError;
+      }
+      lastError = apiError;
+      console.warn(`Gemini API attempt ${attempts + 1} failed: ${apiError.message}. Retrying...`);
+      attempts++;
+      if (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
     }
-
-    if (responseText.includes("ERROR_INAPPROPRIATE_CONTENT")) {
-      const error = new Error("ERROR_INAPPROPRIATE_CONTENT");
-      error.status = 400;
-      throw error;
-    }
-
-    return responseText;
-  } catch (apiError) {
-    if (apiError.message === "ERROR_INAPPROPRIATE_CONTENT") {
-      throw apiError;
-    }
-    const error = new Error("ERROR_AI_OVERLOAD");
-    error.status = 503;
-    throw error;
   }
+
+  console.error("Gemini API failed after all attempts:", lastError);
+  const error = new Error("ERROR_AI_OVERLOAD: " + lastError.message);
+  error.status = 503;
+  throw error;
 };
