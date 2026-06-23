@@ -21,7 +21,7 @@ export const LanguageProvider = ({ children }) => {
     setLanguageState(lang);
     if (auth.currentUser) {
       auth.currentUser.language = lang;
-      console.log(`Mock Language Update: Changed to ${lang}`);
+      console.log(`Language updated: Changed to ${lang}`);
     }
   };
 

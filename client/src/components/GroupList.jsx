@@ -1,64 +1,190 @@
 // client/src/components/GroupList.jsx
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase';
-import { mockGroups } from '../mock/mockData';
+import { fetchGroupsApi, joinGroupApi, leaveGroupApi, fetchGroupByIdApi } from '../services/groupService';
 import { Users, BookOpen, Search, ArrowRight, UserPlus, UserMinus, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
+import ConfirmModal from './ConfirmModal';
+import GroupFilters from './GroupFilters';
+import GroupFollowToggle from './GroupFollowToggle';
 
-export default function GroupList({ onSelectGroup }) {
+export default function GroupList({ onSelectGroup, showToast }) {
   const { t, isRTL } = useLanguage();
   const [groups, setGroups] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    search: '',
+    subject: '',
+    sortBy: 'newest'
+  });
   const [loading, setLoading] = useState(true);
 
-  // סימולציית טעינה קצרה ואז משיכת נתונים מה-Mock Data
+  // Reusable confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    icon: null,
+    type: 'indigo'
+  });
+
+  const triggerConfirm = (params) => {
+    setConfirmModal({
+      isOpen: true,
+      ...params
+    });
+  };
+
+  // Fetch groups from the server
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setGroups([...mockGroups]);
-      setLoading(false);
-    }, 400); // טעינה מדומה של 400 מילישניות בשביל האפקט של ה-Skeleton
-    return () => clearTimeout(timer);
+    let active = true;
+    const loadGroups = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchGroupsApi();
+        if (active) {
+          setGroups(data);
+        }
+      } catch (error) {
+        console.error("Failed to load groups:", error);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    loadGroups();
+    return () => { active = false; };
   }, []);
 
-  // עדכון מצב הצטרפות או עזיבה מקומית בזיכרון ה-Mock Data
-  const handleJoinLeave = (e, group) => {
+  const proceedJoin = async (group, userId) => {
+    try {
+      await joinGroupApi(group.id, userId);
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return { ...g, members: [...g.members, userId] };
+        }
+        return g;
+      }));
+      showToast(t('joinGroup'), t('joinedGroup'), "success");
+    } catch (error) {
+      console.error("Error joining group:", error);
+      showToast(t('error') || "Error", error.message, "error");
+    }
+  };
+
+  const proceedLeave = async (group, userId) => {
+    try {
+      await leaveGroupApi(group.id, userId);
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return { ...g, members: g.members.filter(uid => String(uid) !== String(userId)) };
+        }
+        return g;
+      }));
+      showToast(t('leaveGroup'), t('leftGroup'), "success");
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      showToast(t('error') || "Error", error.message, "error");
+    }
+  };
+
+  // Update membership status using API
+  const handleJoinLeave = async (e, group) => {
     e.stopPropagation();
     if (!auth.currentUser) {
-      alert("Please sign in to join groups");
+      showToast("Authentication Required", "Please sign in to join groups", "error");
       return;
     }
 
-    const currentGroup = mockGroups.find(g => g.id === group.id);
-    if (!currentGroup) return;
-
-    const isMember = currentGroup.members.includes(auth.currentUser.uid);
+    const userId = auth.currentUser.uid;
+    const isMember = group.members.includes(userId) ||
+      group.members.includes(Number(userId)) ||
+      group.members.includes(String(userId));
 
     if (isMember) {
-      // עזיבת קבוצה
-      currentGroup.members = currentGroup.members.filter(uid => uid !== auth.currentUser.uid);
+      triggerConfirm({
+        title: t('leaveGroup') || "Leave Group",
+        message: t('confirmLeaveGroup') || "Are you sure you want to leave this group?",
+        icon: UserMinus,
+        type: 'danger',
+        onConfirm: () => proceedLeave(group, userId)
+      });
     } else {
-      // הצטרפות לקבוצה
-      currentGroup.members.push(auth.currentUser.uid);
+      triggerConfirm({
+        title: t('joinGroup') || "Join Group",
+        message: t('confirmJoinPrompt') || "Are you sure you want to join this group?",
+        icon: UserPlus,
+        type: 'indigo',
+        onConfirm: () => proceedJoin(group, userId)
+      });
     }
+  };
 
-    // רענון הסטייט המקומי כדי שהשינוי ישתקף מיד במסך
-    setGroups([...mockGroups]);
+  const handleJoinAndSelect = async (group) => {
+    if (!auth.currentUser) {
+      showToast("Authentication Required", "Please sign in to join groups", "error");
+      return;
+    }
+    const userId = auth.currentUser.uid;
+    try {
+      await joinGroupApi(group.id, userId);
+
+      // Fetch the fresh group details directly from the API
+      const updatedGroup = await fetchGroupByIdApi(group.id);
+
+      // Update state
+      setGroups(prev => prev.map(g => {
+        if (g.id === group.id) {
+          return updatedGroup;
+        }
+        return g;
+      }));
+
+      showToast(t('joinGroup'), t('joinedGroup'), "success");
+
+      // Select group immediately
+      onSelectGroup(updatedGroup);
+    } catch (error) {
+      console.error("Error joining group:", error);
+      showToast(t('error') || "Error", error.message, "error");
+    }
   };
 
   // סינון ופיקוח על הטרמינל
   const filteredGroups = groups.filter(g => {
-    const isMember = auth.currentUser && g.members.includes(auth.currentUser.uid);
+    const isMember = auth.currentUser && (
+      g.members.includes(auth.currentUser.uid) ||
+      g.members.includes(Number(auth.currentUser.uid)) ||
+      g.members.includes(String(auth.currentUser.uid))
+    );
     const isPublic = !g.isPrivate;
-    const matchesSearch = 
-      g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      g.subject.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesSearch && (isPublic || isMember);
+    const matchesSearch =
+      !filters.search ||
+      g.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      g.subject.toLowerCase().includes(filters.search.toLowerCase());
+
+    const matchesSubject =
+      !filters.subject ||
+      g.subject === filters.subject;
+
+    return matchesSearch && matchesSubject && (isPublic || isMember);
   });
 
-  const myGroups = filteredGroups.filter(g => auth.currentUser && g.members.includes(auth.currentUser.uid));
-  const discoverGroups = filteredGroups.filter(g => !auth.currentUser || !g.members.includes(auth.currentUser.uid));
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    if (filters.sortBy === 'alphabetical') {
+      return a.name.localeCompare(b.name);
+    } else if (filters.sortBy === 'popular') {
+      return (b.members?.length || 0) - (a.members?.length || 0);
+    } else {
+      // Default: newest
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    }
+  });
+
+  const myGroups = sortedGroups.filter(g => auth.currentUser && g.members.includes(auth.currentUser.uid));
+  const discoverGroups = sortedGroups.filter(g => !auth.currentUser || !g.members.includes(auth.currentUser.uid));
 
   // תת-קומפוננטה פנימית להצגת הגריד המעוצב שלך
   const GroupGrid = ({ groups, title }) => {
@@ -73,9 +199,27 @@ export default function GroupList({ onSelectGroup }) {
           {groups.map(group => {
             const isMember = auth.currentUser && group.members.includes(auth.currentUser.uid);
             return (
-              <div 
+              <div
                 key={group.id}
-                onClick={() => onSelectGroup(group)}
+                onClick={async () => {
+                  if (isMember) {
+                    try {
+                      const freshGroup = await fetchGroupByIdApi(group.id);
+                      onSelectGroup(freshGroup);
+                    } catch (err) {
+                      console.error("Error fetching fresh group details:", err);
+                      onSelectGroup(group);
+                    }
+                  } else {
+                    triggerConfirm({
+                      title: t('joinGroup') || "Join Group",
+                      message: t('confirmJoinPrompt') || "To enter the group and view its materials, you must be registered. Would you like to join and enter?",
+                      icon: UserPlus,
+                      type: 'indigo',
+                      onConfirm: () => handleJoinAndSelect(group)
+                    });
+                  }
+                }}
                 className="group bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -85,8 +229,8 @@ export default function GroupList({ onSelectGroup }) {
                       {group.subject}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {group.createdAt?.toDate 
-                        ? format(group.createdAt.toDate(), 'MMM d, yyyy') 
+                      {group.createdAt?.toDate
+                        ? format(group.createdAt.toDate(), 'MMM d, yyyy')
                         : format(new Date(group.createdAt), 'MMM d, yyyy')}
                     </span>
                   </div>
@@ -94,25 +238,30 @@ export default function GroupList({ onSelectGroup }) {
                     {group.name}
                   </h3>
                   <p className="text-gray-600 text-sm line-clamp-2 mb-4 text-left">
-                    {group.description || 'No description provided.'}
+                    {group.description || t('noDescription')}
                   </p>
                 </div>
-                
+
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
                   <div className="flex items-center gap-2 text-gray-500 text-sm">
                     <Users size={16} />
-                    <span>{group.members.length} members</span>
+                    <span>{group.members.length} {t('members')}</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <GroupFollowToggle
+                      groupId={group.id}
+                      userId={auth.currentUser?.uid}
+                      showToast={showToast}
+                    />
                     <button
                       onClick={(e) => handleJoinLeave(e, group)}
                       className={cn(
                         "p-2 rounded-lg transition-all cursor-pointer",
-                        isMember 
-                          ? "bg-red-50 text-red-600 hover:bg-red-100" 
+                        isMember
+                          ? "bg-red-50 text-red-600 hover:bg-red-100"
                           : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
                       )}
-                      title={isMember ? "Leave Group" : "Join Group"}
+                      title={isMember ? t('leaveGroup') : t('joinGroup')}
                     >
                       {isMember ? <UserMinus size={18} /> : <UserPlus size={18} />}
                     </button>
@@ -129,8 +278,10 @@ export default function GroupList({ onSelectGroup }) {
     );
   };
 
+  const uniqueSubjects = Array.from(new Set(groups.map(g => g.subject).filter(Boolean)));
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3">
           <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-100">
@@ -138,17 +289,13 @@ export default function GroupList({ onSelectGroup }) {
           </div>
           {t('groupStudy' || 'Study Groups')}
         </h2>
-        <div className="relative max-w-md w-full">
-          <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isRTL ? 'right-3' : 'left-3'}`} size={18} />
-          <input
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            className={`w-full py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'}`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
       </div>
+
+      <GroupFilters
+        subjects={uniqueSubjects}
+        filters={filters}
+        onFilterChange={setFilters}
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -170,6 +317,17 @@ export default function GroupList({ onSelectGroup }) {
           <p className="text-gray-500 max-w-xs mx-auto">{t('noGroupsDesc')}</p>
         </div>
       )}
+
+      {/* Reusable Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        type={confirmModal.type}
+      />
     </div>
   );
 }

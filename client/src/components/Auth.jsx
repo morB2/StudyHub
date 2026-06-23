@@ -3,15 +3,13 @@
 import { useState, useEffect } from "react";
 import {
   auth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from "../firebase";
 import { LogIn, LogOut, Mail, Lock, X } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 
-export default function Auth({ onClose, mode = "all" }) {
+export default function Auth({ onClose, mode = "all", onProfileClick }) {
   const { isRTL } = useLanguage();
   const [user, setUser] = useState(auth.currentUser);
 
@@ -30,20 +28,62 @@ export default function Auth({ onClose, mode = "all" }) {
   const handleAuth = async (e) => {
     e.preventDefault();
     setError("");
+
+    // 1. חסימת סיסמה קצרה מדי בצד הלקוח (המשתמש מקבל שגיאה אדומה מיד)
+    if (isSignUp && password.length < 4) {
+      setError("הסיסמה חייבת להכיל לפחות 4 תווים.");
+      return; // עוצרים את הפעולה, לא פונים לשרת
+    }
+
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-          email.split("@")[0],
-        );
+        const defaultName = email.split("@")[0];
+        
+        const response = await fetch("http://localhost:3001/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: defaultName, email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "ההרשמה נכשלה.");
+        }
+
+        // במקום alert: נציג הודעה ונחכה רגע לפני שנעבור למצב התחברות
+        setError("הרשמה בוצעה בהצלחה! מעביר אותך להתחברות...");
+        
+        setTimeout(() => {
+          setIsSignUp(false);
+          setPassword("");
+          setError(""); // איפוס ההודעה אחרי המעבר
+        }, 2000); // ההודעה תוצג למשך 2 שניות
+        
+        
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        // ======== התחברות אמיתית מול שרת ה-Node.js ========
+        const response = await fetch("http://localhost:3001/users/login", { 
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "ההתחברות נכשלה. כדאי לבדוק את הפרטים שוב.");
+        }
+
+        auth.currentUser = data.user;
+        localStorage.setItem("studybuddy_user", JSON.stringify(data.user));
+        localStorage.setItem("studybuddy_token", data.token); 
+
+        if (onClose) onClose();
+        window.location.reload();
       }
-      if (onClose) onClose();
-      // רענון קל כדי לעדכן את האפליקציה הראשית והדשבורד מיד
-      window.location.reload();
     } catch (err) {
       setError(err.message || "Authentication failed.");
     }
@@ -82,28 +122,61 @@ export default function Auth({ onClose, mode = "all" }) {
     }, 1000);
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    window.location.reload();
-  };
+const handleLogout = async () => {
+    try {
+      // 1. מחיקת נתוני המשתמש והטוקן מה-Local Storage כדי שהדפדפן ישכח אותם
+      localStorage.removeItem("studybuddy_user");
+      localStorage.removeItem("studybuddy_token");
 
+      // 2. איפוס אובייקט המשתמש המקומי בזיכרון של ה-Auth
+      if (auth) {
+        auth.currentUser = null;
+      }
+
+      // 3. רענון העמוד - עכשיו האפליקציה תעלה מחדש, תראה שה-Local Storage ריק ותחזיר לעמוד הנחיתה
+      window.location.reload();
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+  };
   // מניעת כפל ויזואלי: אם אנחנו בתוך עמוד הנחיתה כמודאל, לא נרנדר את כפתור הפרופיל הראשי
-  if (user && mode === "navbarOnly") {
+if (user && mode === "navbarOnly") {
+    // משיכת השם מהשדה המעודכן, או מ-displayName הישן
+    const userName = user.name || user.displayName || "משתמש";
+    // משיכת התמונה - ב-Supabase שמרנו את זה בתור photoURL
+    const userPhoto = user.photoURL || user.avatar;
+
     return (
       <div className="flex items-center gap-3 bg-gray-50/80 px-4 py-2 rounded-2xl border border-gray-100">
         <div className={isRTL ? "text-right" : "text-left"}>
-          <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
+          {/* הוספנו את המילה 'הי,' לפני השם */}
+          <p className="text-xs font-bold text-gray-900">הי, {userName}</p>
           <button
             onClick={handleLogout}
-            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer"
+            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 cursor-pointer mt-0.5"
           >
             <LogOut size={12} />
             <span>התנתק</span>
           </button>
         </div>
-        <div className="w-9 h-9 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-          {user.avatar ||
-            (user.displayName ? user.displayName.substring(0, 2) : "יי")}
+        
+        {/* העיגול של הפרופיל */}
+        <div 
+          onClick={onProfileClick}
+          // הוספנו overflow-hidden כדי שהתמונה לא תגלוש מחוץ לעיגול
+          className="w-9 h-9 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer hover:bg-indigo-700 transition-all overflow-hidden"
+        >
+          {userPhoto ? (
+            // אם יש תמונה, נציג אותה
+            <img 
+              src={userPhoto} 
+              alt={userName} 
+              className="w-full h-full object-cover" 
+            />
+          ) : (
+            // אם אין תמונה, נציג את 2 האותיות הראשונות של השם
+            userName.substring(0, 2)
+          )}
         </div>
       </div>
     );
@@ -126,7 +199,7 @@ export default function Auth({ onClose, mode = "all" }) {
         </h2>
 
         {error && (
-          <div className="p-3 bg-red-50 text-red-600 text-xs font-semibold rounded-xl text-center border border-red-100">
+          <div className={`p-3 text-xs font-semibold rounded-xl text-center border ${error.includes("בהצלחה") ? "bg-green-50 text-green-600 border-green-100" : "bg-red-50 text-red-600 border-red-100"}`}>
             {error}
           </div>
         )}
@@ -164,6 +237,7 @@ export default function Auth({ onClose, mode = "all" }) {
               <input
                 type="password"
                 required
+                minLength={4} 
                 placeholder="••••••••"
                 className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
                 value={password}
@@ -198,7 +272,7 @@ export default function Auth({ onClose, mode = "all" }) {
             alt="Google"
             className="w-4 h-4"
           />
-          <span>Sign in with Google</span>
+          <span>Sign in with google</span>
         </button>
 
         <div className="text-center pt-2">
