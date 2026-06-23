@@ -424,7 +424,9 @@ export default function GroupDetail({ group, onBack, showToast }) {
           )}
 
           {activeTab === 'video' && (
-            <VideoCall groupId={groupDetails.id} onLeave={() => setActiveTab('chat')} />
+            <VideoCall groupId={groupDetails.id} 
+            groupMembers={groupMembers}
+            onLeave={() => setActiveTab('chat')} />
           )}
 
           {activeTab === 'members' && (
